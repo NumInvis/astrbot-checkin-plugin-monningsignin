@@ -1,4 +1,4 @@
-# 莫宁宁的币 - AstrBot 经济系统插件 v1.0
+# 莫宁宁的币 - AstrBot 经济系统插件 v1.0.1
 
 [![GitHub stars](https://img.shields.io/github/stars/MTMASTER-star/astrbot-checkin-plugin-monningsignin?style=social)](https://github.com/MTMASTER-star/astrbot-checkin-plugin-monningsignin/stargazers)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -104,7 +104,7 @@ git clone https://github.com/MTMASTER-star/astrbot-checkin-plugin-monningsignin.
 
 ## 📝 更新日志
 
-### v1.0 (2025-03-12) - 初始版本
+### v1.0.1 (2025-03-12) - 初始版本
 - 🎉 项目正式发布
 - ✅ 完整的经济系统：签到、银行、转账
 - ✅ 商店系统：购买商品、背包管理

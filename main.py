@@ -1,5 +1,5 @@
 """
-莫宁宁的币 - 专业级经济系统插件 v1.0
+莫宁宁的币 - 专业级经济系统插件 v2.0.0
 重构版本：模块化、高性能、易维护
 """
 import os
@@ -288,12 +288,18 @@ class DBManager:
             await db.execute("CREATE INDEX IF NOT EXISTS idx_achievements_user ON user_achievements(user_id)")
             await db.execute("CREATE INDEX IF NOT EXISTS idx_purchase_user ON purchase_log(user_id)")
             
+            # v1.0.1.1 新增索引
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_stock_holdings_stock ON stock_holdings(stock_name)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_user_society_name ON user_society(society_name)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_stock_price_history ON stock_price_history(stock_name, timestamp)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_tax_pool_date ON tax_pool(date)")
+            
             await db.commit()
         
         self._ready = True
 
 # ============== 主插件类 ==============
-@register("astrbot_plugin_signin", "鬼神莫能窥", "莫宁宁的币", "1.0")
+@register("astrbot_plugin_signin", "鬼神莫能窥", "莫宁宁的币", "2.0.0")
 class EconomyPlugin(Star):
     """经济系统主插件"""
     
@@ -319,7 +325,7 @@ class EconomyPlugin(Star):
         self.db_manager = DatabaseManager(self.db_path)
         
         self._initialized = False
-        logger.info("【经济系统】插件加载中 v1.0")
+        logger.info("【经济系统】插件加载中 v2.0.0")
     
     async def _ensure_db(self):
         """确保数据库初始化"""
@@ -390,8 +396,8 @@ class EconomyPlugin(Star):
     async def _get_user_asset(self, user_id: str) -> Tuple[int, int, int, int]:
         """获取用户资产 (总, 现金, 银行, 股票)"""
         user = await self._get_user(user_id)
-        cash = user['balance']
-        bank = user['bank_balance']
+        cash = user["balance"]
+        bank = user["bank_balance"]
         
         # 计算股票市值
         async with aiosqlite.connect(self.db_path) as db:
@@ -534,7 +540,7 @@ class EconomyPlugin(Star):
         signin_result = await self.signin_service.signin(user_id, percentile)
         
         # 检查是否已签到
-        if not signin_result['success']:
+        if not signin_result["success"]:
             yield event.plain_result(
                 f"⛔ {signin_result['message']}\n"
                 f"💰 当前余额：{format_num(signin_result['balance'])} 星声\n"
@@ -544,8 +550,8 @@ class EconomyPlugin(Star):
         
         # 税收分红
         tax_bonus, remaining_pool = await self._claim_tax_bonus(user_id)
-        total = signin_result['total'] + tax_bonus
-        new_balance = signin_result['balance'] + tax_bonus
+        total = signin_result["total"] + tax_bonus
+        new_balance = signin_result["balance"] + tax_bonus
         
         # 更新余额以包含税收分红
         async with aiosqlite.connect(self.db_path) as db:
@@ -556,7 +562,7 @@ class EconomyPlugin(Star):
             await db.commit()
         
         # 检查成就
-        new_achievements = await self.achievement_service.check_achievements(user_id, "signin", {"consecutive": signin_result['consecutive_days']})
+        new_achievements = await self.achievement_service.check_achievements(user_id, "signin", {"consecutive": signin_result["consecutive_days"]})
         
         # 显示新成就通知
         achievement_msg = ""
@@ -596,7 +602,7 @@ class EconomyPlugin(Star):
                             "UPDATE users SET balance = balance + ? WHERE user_id = ?",
                             (reward, user_id)
                         )
-                        effect_msg = f"\n✨ 效果：{effect_desc}\n实际获得 {reward} 星声"
+                        effect_msg = f"\n🎁 效果：{effect_desc}\n实际获得 {reward} 星声"
                     
                     # 失去星声（按总资产比例）
                     elif effect_type == "balance_penalty":
@@ -621,7 +627,7 @@ class EconomyPlugin(Star):
                             "UPDATE users SET balance = balance - ? WHERE user_id = ?",
                             (penalty, user_id)
                         )
-                        effect_msg = f"\n✨ 效果：{effect_desc}\n总资产 {format_num(total_assets)}，实际失去 {format_num(penalty)} 星声（{penalty_rate*100:.1f}%）"
+                        effect_msg = f"\n🎁 效果：{effect_desc}\n总资产 {format_num(total_assets)}，实际失去 {format_num(penalty)} 星声（{penalty_rate*100:.1f}%）"
                     
                     # 获得好感值
                     elif effect_type == "favor_value_reward":
@@ -634,7 +640,7 @@ class EconomyPlugin(Star):
                             "UPDATE users SET favor_value = COALESCE(favor_value, 0) + ? WHERE user_id = ?",
                             (favor_reward, user_id)
                         )
-                        effect_msg = f"\n✨ 效果：{effect_desc}\n实际获得 {favor_reward} 点好感值"
+                        effect_msg = f"\n🎁 效果：{effect_desc}\n实际获得 {favor_reward} 点好感值"
 
                     # 扣除好感值
                     elif effect_type == "favor_value_penalty":
@@ -647,7 +653,7 @@ class EconomyPlugin(Star):
                             "UPDATE users SET favor_value = COALESCE(favor_value, 0) - ? WHERE user_id = ?",
                             (favor_penalty, user_id)
                         )
-                        effect_msg = f"\n✨ 效果：{effect_desc}\n实际扣除 {favor_penalty} 点好感值"
+                        effect_msg = f"\n🎁 效果：{effect_desc}\n实际扣除 {favor_penalty} 点好感值"
                     
                     # 持仓股票立即上涨（随机一只）
                     elif effect_type == "stock_price_up":
@@ -679,9 +685,9 @@ class EconomyPlugin(Star):
                                     "UPDATE stock_prices SET current_price = ? WHERE stock_name = ?",
                                     (new_price, stock_name)
                                 )
-                                effect_msg = f"\n✨ 效果：{effect_desc}\n【{stock_name}】上涨 {increase_rate*100:.1f}%"
+                                effect_msg = f"\n🎁 效果：{effect_desc}\n【{stock_name}】上涨 {increase_rate*100:.1f}%"
                         else:
-                            effect_msg = f"\n✨ 效果：{effect_desc}\n但你没有持仓股票"
+                            effect_msg = f"\n🎁 效果：{effect_desc}\n但你没有持仓股票"
 
                     # 持仓股票立即下跌（随机一只）
                     elif effect_type == "stock_price_down":
@@ -713,9 +719,9 @@ class EconomyPlugin(Star):
                                     "UPDATE stock_prices SET current_price = ? WHERE stock_name = ?",
                                     (new_price, stock_name)
                                 )
-                                effect_msg = f"\n✨ 效果：{effect_desc}\n【{stock_name}】下跌 {decrease_rate*100:.1f}%"
+                                effect_msg = f"\n🎁 效果：{effect_desc}\n【{stock_name}】下跌 {decrease_rate*100:.1f}%"
                         else:
-                            effect_msg = f"\n✨ 效果：{effect_desc}\n但你没有持仓股票"
+                            effect_msg = f"\n🎁 效果：{effect_desc}\n但你没有持仓股票"
                     
                     # 失去工作
                     elif effect_type == "lose_job":
@@ -732,11 +738,11 @@ class EconomyPlugin(Star):
                                     "DELETE FROM user_work WHERE user_id = ?",
                                     (user_id,)
                                 )
-                                effect_msg = f"\n✨ 效果：{effect_desc}\n你失去了工作：{work_name}"
+                                effect_msg = f"\n🎁 效果：{effect_desc}\n你失去了工作：{work_name}"
                             else:
-                                effect_msg = f"\n✨ 效果：{effect_desc}\n但你现在是无业游民"
+                                effect_msg = f"\n🎁 效果：{effect_desc}\n但你现在是无业游民"
                         except:
-                            effect_msg = f"\n✨ 效果：{effect_desc}\n但你现在是无业游民"
+                            effect_msg = f"\n🎁 效果：{effect_desc}\n但你现在是无业游民"
                     
                     # 占卜次数增加
                     elif effect_type == "lottery_extra":
@@ -745,11 +751,11 @@ class EconomyPlugin(Star):
                             "INSERT OR REPLACE INTO user_lottery_extra (user_id, extra_count, date) VALUES (?, COALESCE((SELECT extra_count FROM user_lottery_extra WHERE user_id = ? AND date = ?), 0) + ?, ?)",
                             (user_id, user_id, today, effect_value, today)
                         )
-                        effect_msg = f"\n✨ 效果：{effect_desc}"
+                        effect_msg = f"\n🎁 效果：{effect_desc}"
                     
                     # 其他效果
                     else:
-                        effect_msg = f"\n✨ 效果：{effect_desc}"
+                        effect_msg = f"\n🎁 效果：{effect_desc}"
                 
                 await db.execute(
                     "INSERT INTO user_daily_tarot (user_id, date, tarot_card, draw_time) VALUES (?, ?, ?, ?)",
@@ -821,7 +827,7 @@ class EconomyPlugin(Star):
         
         # 检查是否为管理员
         if user_id not in CONFIG.ADMIN_IDS:
-            yield event.plain_result("❌ 权限不足！此命令仅管理员可用")
+            yield event.plain_result("? 权限不足！此命令仅管理员可用")
             return
         
         help_text = """🔧 管理员指令
@@ -843,18 +849,18 @@ class EconomyPlugin(Star):
         
         # 检查是否为管理员
         if user_id not in CONFIG.ADMIN_IDS:
-            yield event.plain_result("❌ 权限不足！此命令仅管理员可用")
+            yield event.plain_result("? 权限不足！此命令仅管理员可用")
             return
         
         # 获取密码
         args = event.get_message_text().split()
         if len(args) < 2:
-            yield event.plain_result("❌ 请输入密码：/新赛季 <密码>")
+            yield event.plain_result("? 请输入密码：/新赛季 <密码>")
             return
         
         password = args[1]
         if password != CONFIG.SEASON_PASSWORD:
-            yield event.plain_result("❌ 密码错误！")
+            yield event.plain_result("? 密码错误！")
             return
         
         await self._ensure_db()
@@ -901,7 +907,7 @@ class EconomyPlugin(Star):
         with open("config.py", "w", encoding="utf-8") as f:
             f.write(config_content)
         
-        yield event.plain_result(f"❌ 新赛季开启成功！现在是 S{new_season} 赛季\n\n" +
+        yield event.plain_result(f"? 新赛季开启成功！现在是 S{new_season} 赛季\n\n" +
                                "🏆 赛季重置内容：\n" +
                                "- 清空所有用户的抽卡资源\n" +
                                "- 清空所有用户的银行存款\n" +
@@ -921,12 +927,12 @@ class EconomyPlugin(Star):
         
         # 检查是否为管理员
         if user_id not in CONFIG.ADMIN_IDS:
-            yield event.plain_result("❌ 权限不足！此命令仅管理员可用")
+            yield event.plain_result("? 权限不足！此命令仅管理员可用")
             return
         
         args = event.get_message_text().split()
         if len(args) < 2:
-            yield event.plain_result("�� 用法：/admin <子命令> [参数]")
+            yield event.plain_result("? 用法：/admin <子命令> [参数]")
             return
         
         subcommand = args[1]
@@ -934,7 +940,7 @@ class EconomyPlugin(Star):
         # 处理商店相关命令
         if subcommand == "shop":
             if len(args) < 3:
-                yield event.plain_result("�� 用法：/admin shop <add/remove/edit> [参数]")
+                yield event.plain_result("? 用法：/admin shop <add/remove/edit> [参数]")
                 return
             
             shop_cmd = args[2]
@@ -942,7 +948,7 @@ class EconomyPlugin(Star):
             # 上架新商品
             if shop_cmd == "add":
                 if len(args) < 7:
-                    yield event.plain_result("�� 用法：/admin shop add <商品名> <价格> <每日限购> <好感值> <描述>")
+                    yield event.plain_result("? 用法：/admin shop add <商品名> <价格> <每日限购> <好感值> <描述>")
                     return
                 
                 item_name = args[3]
@@ -951,7 +957,7 @@ class EconomyPlugin(Star):
                     daily_limit = int(args[5])
                     favor_value = int(args[6])
                 except:
-                    yield event.plain_result("❌ 价格、每日限购和好感值必须是整数！")
+                    yield event.plain_result("? 价格、每日限购和好感值必须是整数！")
                     return
                 
                 desc = " ".join(args[7:])
@@ -979,14 +985,14 @@ class EconomyPlugin(Star):
                         f.write(new_config)
                     
                     # 更新favor_items字典（需要重启插件生效）
-                    yield event.plain_result(f"❌ 商品上架成功！\n商品：{item_name}\n价格：{price}星声\n每日限购：{daily_limit}个\n好感值：{favor_value}点\n描述：{desc}")
+                    yield event.plain_result(f"? 商品上架成功！\n商品：{item_name}\n价格：{price}星声\n每日限购：{daily_limit}个\n好感值：{favor_value}点\n描述：{desc}")
                 else:
-                    yield event.plain_result("❌ 配置文件格式错误，无法添加商品")
+                    yield event.plain_result("? 配置文件格式错误，无法添加商品")
             
             # 下架商品
             elif shop_cmd == "remove":
                 if len(args) < 4:
-                    yield event.plain_result("�� 用法：/admin shop remove <商品名>")
+                    yield event.plain_result("? 用法：/admin shop remove <商品名>")
                     return
                 
                 item_name = args[3]
@@ -1005,12 +1011,12 @@ class EconomyPlugin(Star):
                     f.write(new_config)
                 
                 # 更新favor_items字典（需要重启插件生效）
-                yield event.plain_result(f"❌ 商品下架成功！\n商品：{item_name}")
+                yield event.plain_result(f"? 商品下架成功！\n商品：{item_name}")
             
             # 修改商品属性
             elif shop_cmd == "edit":
                 if len(args) < 5:
-                    yield event.plain_result("�� 用法：/admin shop edit <商品名> <属性> <值>")
+                    yield event.plain_result("? 用法：/admin shop edit <商品名> <属性> <值>")
                     return
                 
                 item_name = args[3]
@@ -1020,7 +1026,7 @@ class EconomyPlugin(Star):
                 # 验证属性
                 valid_attributes = ["price", "daily_limit"]
                 if attribute not in valid_attributes:
-                    yield event.plain_result(f"❌ 无效的属性！有效属性：{', '.join(valid_attributes)}")
+                    yield event.plain_result(f"? 无效的属性！有效属性：{', '.join(valid_attributes)}")
                     return
                 
                 # 验证值
@@ -1028,7 +1034,7 @@ class EconomyPlugin(Star):
                     if attribute in ["price", "daily_limit"]:
                         int(value)
                 except:
-                    yield event.plain_result("❌ 值必须是整数！")
+                    yield event.plain_result("? 值必须是整数！")
                     return
                 
                 # 更新配置文件
@@ -1045,13 +1051,13 @@ class EconomyPlugin(Star):
                 with open("config.py", "w", encoding="utf-8") as f:
                     f.write(new_config)
                 
-                yield event.plain_result(f"❌ 商品属性修改成功！\n商品：{item_name}\n属性：{attribute}\n新值：{value}")
+                yield event.plain_result(f"? 商品属性修改成功！\n商品：{item_name}\n属性：{attribute}\n新值：{value}")
             
             else:
-                yield event.plain_result("❌ 无效的商店命令！可用命令：add, remove, edit")
+                yield event.plain_result("? 无效的商店命令！可用命令：add, remove, edit")
         
         else:
-            yield event.plain_result("❌ 无效的管理员命令！")
+            yield event.plain_result("? 无效的管理员命令！")
 
     @filter.command("余额")
     async def cmd_balance(self, event: AstrMessageEvent):
@@ -1066,7 +1072,7 @@ class EconomyPlugin(Star):
         total, cash, bank, stock = await self._get_user_asset(user_id)
         user = await self._get_user(user_id)
 
-        status = "✅ 今日已签到" if user['last_signin_date'] == today else "❌ 今日未签到"
+        status = "? 今日已签到" if user["last_signin_date"] == today else "? 今日未签到"
 
         # 获取好感度和好感值
         async with aiosqlite.connect(self.db_path) as db:
@@ -1119,21 +1125,21 @@ class EconomyPlugin(Star):
             if amount <= 0:
                 raise ValueError()
         except:
-            yield event.plain_result("❌ 金额必须是正整数！")
+            yield event.plain_result("? 金额必须是正整数！")
             return
         
         target_id = self._parse_target(event)
         if not target_id:
-            yield event.plain_result("❌ 请@要转账的用户！")
+            yield event.plain_result("? 请@要转账的用户！")
             return
         
         if sender_id == target_id:
-            yield event.plain_result("❌ 不能给自己转账！")
+            yield event.plain_result("? 不能给自己转账！")
             return
         
         sender = await self._get_user(sender_id)
-        if sender['balance'] < amount:
-            yield event.plain_result(f"❌ 余额不足！当前：{format_num(sender['balance'])}星声")
+        if sender["balance"] < amount:
+            yield event.plain_result(f"? 余额不足！当前：{format_num(sender['balance'])}星声")
             return
         
         async with aiosqlite.connect(self.db_path) as db:
@@ -1173,7 +1179,7 @@ class EconomyPlugin(Star):
         sorted_assets = sorted(all_assets, key=lambda x: x[1], reverse=True)
         
         if not sorted_assets:
-            yield event.plain_result("📭 暂无资产数据")
+            yield event.plain_result("🎁 暂无资产数据")
             return
         
         medals = ["🎁", "🎁", "🎁", "4🎁", "5🎁", "6🎁", "7🎁", "8🎁", "9🎁", "🎁"]
@@ -1285,7 +1291,7 @@ class EconomyPlugin(Star):
             history = await cursor.fetchall()
         
         if not history:
-            yield event.plain_result("📭 暂无经济数据")
+            yield event.plain_result("🎁 暂无经济数据")
             return
         
         latest = history[0]
@@ -1335,7 +1341,7 @@ class EconomyPlugin(Star):
             f"🏛️ 富豪税与贫富差距报告\n"
             f"═══════════════════\n"
             f"💰 总收税：{format_num(total)}星声\n"
-            f"📅 今日奖池：{format_num(bonus)}星声\n"
+            f"🎁 今日奖池：{format_num(bonus)}星声\n"
             f"⛔ 已领取：{format_num(claimed)}星声\n"
             f"📦 剩余：{format_num(remaining)}星声\n"
         )
@@ -1365,12 +1371,12 @@ class EconomyPlugin(Star):
         
         # 确保 favor_system 已初始化
         if not self.favor_system:
-            yield event.plain_result("❌ 系统初始化中，请稍后再试")
+            yield event.plain_result("? 系统初始化中，请稍后再试")
             return
         
         favor_info = await self.favor_system.get_user_favor_info(user_id)
         if not favor_info:
-            yield event.plain_result("❌ 获取好感度信息失败")
+            yield event.plain_result("? 获取好感度信息失败")
             return
         
         # 获取关系描述和CD信息
@@ -1396,9 +1402,9 @@ class EconomyPlugin(Star):
                     next_update = datetime.strptime(rel_info['next_update_time'], "%Y-%m-%d %H:%M:%S")
                     remaining = next_update - datetime.now()
                     remaining_minutes = int(remaining.total_seconds() / 60)
-                    lines.append(f"⏳ 关系更新CD：{remaining_minutes}分钟后可更新")
+                    lines.append(f"? 关系更新CD：{remaining_minutes}分钟后可更新")
                 except:
-                    lines.append("💡 关系更新CD中")
+                    lines.append("? 关系更新CD中")
         else:
             lines.append("💭 我们的关系：还没有足够的互动记录...")
         
@@ -1413,13 +1419,13 @@ class EconomyPlugin(Star):
         
         # 确保 favor_system 已初始化
         if not self.favor_system:
-            yield event.plain_result("❌ 系统初始化中，请稍后再试")
+            yield event.plain_result("? 系统初始化中，请稍后再试")
             return
         
         ranking = await self.favor_system.get_favor_ranking()
         
         if not ranking:
-            yield event.plain_result("📭 暂无好感度数据")
+            yield event.plain_result("🎁 暂无好感度数据")
             return
         
         lines = ["💕 好感度排行榜 Top 10", "═══════════════════"]
@@ -1466,7 +1472,7 @@ class EconomyPlugin(Star):
             lines.extend([
                 "═══════════════════",
                 f"💡 我的排名：第 {my_rank} 名",
-                f"👤 我的好感度：{my_info.get('favor_level', 0)}",
+                f"🎁 我的好感度：{my_info.get('favor_level', 0)}",
                 f"💭 我们的关系：{my_ai_rel}"
             ])
         
@@ -1503,7 +1509,7 @@ class EconomyPlugin(Star):
             
             for _, achievement, obtain_time in sorted_achievements:
                 lines.append(f"{achievement['emoji']} {achievement['name']}")
-                lines.append(f"   📝 {achievement['desc']}")
+                lines.append(f"   📝 {achievement["desc"]}")
                 # 显示成就加成
                 rarity = achievement.get("rarity", "blue")
                 try:
@@ -1526,7 +1532,7 @@ class EconomyPlugin(Star):
         lines.extend([
             "═══════════════════",
             f"🎁 已获得：{obtained_count}/{total_count}",
-            "✅ 完成各种任务可以获得成就，成就永久保存"
+            "🎁 完成各种任务可以获得成就，成就永久保存"
         ])
         
         yield event.plain_result("\n".join(lines))
@@ -1540,7 +1546,7 @@ class EconomyPlugin(Star):
         
         # 检查是否为管理员
         if user_id not in CONFIG.ADMIN_IDS:
-            yield event.plain_result("❌ 权限不足！此命令仅管理员可用")
+            yield event.plain_result("? 权限不足！此命令仅管理员可用")
             return
         
         # 获取所有用户的成就
@@ -1590,13 +1596,13 @@ class EconomyPlugin(Star):
         
         # 检查是否为管理员
         if user_id not in CONFIG.ADMIN_IDS:
-            yield event.plain_result("❌ 权限不足！此命令仅管理员可用")
+            yield event.plain_result("? 权限不足！此命令仅管理员可用")
             return
         
         # 解析参数: /授予成就 <用户ID/所有人> <成就ID>
         parts = event.message_str.split()
         if len(parts) < 3:
-            yield event.plain_result("�� 用法：/授予成就 <用户ID/所有人> <成就ID>")
+            yield event.plain_result("? 用法：/授予成就 <用户ID/所有人> <成就ID>")
             return
         
         target = parts[1]
@@ -1604,7 +1610,7 @@ class EconomyPlugin(Star):
         
         # 检查成就是否存在
         if achievement_id not in ACHIEVEMENTS:
-            yield event.plain_result(f"❌ 成就 {achievement_id} 不存在！")
+            yield event.plain_result(f"? 成就 {achievement_id} 不存在！")
             return
         
         achievement = ACHIEVEMENTS[achievement_id]
@@ -1614,8 +1620,8 @@ class EconomyPlugin(Star):
             count = await self.achievement_service.grant_achievement_to_all(achievement_id)
             yield event.plain_result(
                 f"⛔ 成功给 {count} 个用户授予成就！\n"
-                f"🏆 {achievement['emoji']} {achievement['name']}\n"
-                f"📝 {achievement['desc']}"
+                f"🏆 {achievement["emoji"]} {achievement['name']}\n"
+                f"📝 {achievement["desc"]}"
             )
         else:
             # 给特定用户授予成就
@@ -1624,8 +1630,8 @@ class EconomyPlugin(Star):
             if success:
                 yield event.plain_result(
                     f"⛔ 成功给用户 {target} 授予成就！\n"
-                    f"🏆 {achievement['emoji']} {achievement['name']}\n"
-                    f"📝 {achievement['desc']}"
+                    f"🏆 {achievement["emoji"]} {achievement['name']}\n"
+                    f"📝 {achievement["desc"]}"
                 )
             else:
                 yield event.plain_result(f"🎁 用户 {target} 已经拥有该成就。")
@@ -1639,13 +1645,13 @@ class EconomyPlugin(Star):
         
         # 检查是否为管理员
         if user_id not in CONFIG.ADMIN_IDS:
-            yield event.plain_result("❌ 权限不足！此命令仅管理员可用")
+            yield event.plain_result("? 权限不足！此命令仅管理员可用")
             return
         
         # 解析参数: /重置签到 <用户ID/所有人>
         parts = event.message_str.split()
         if len(parts) < 2:
-            yield event.plain_result("�� 用法：/重置签到 <用户ID/所有人>")
+            yield event.plain_result("? 用法：/重置签到 <用户ID/所有人>")
             return
         
         target = parts[1]
@@ -1673,8 +1679,8 @@ class EconomyPlugin(Star):
             
             yield event.plain_result(
                 f"⛔ 已重置所有人的今日签到状态！\n"
-                f"🔄 重置签到记录：{signin_count} 人\n"
-                f"🔄 重置塔罗牌记录：{tarot_count} 人\n"
+                f"🎁 重置签到记录：{signin_count} 人\n"
+                f"🎁 重置塔罗牌记录：{tarot_count} 人\n"
                 f"📅 连续签到天数保持不变\n"
                 f"🎁 所有人可以重新签到并抽取塔罗牌"
             )
@@ -1735,7 +1741,7 @@ class EconomyPlugin(Star):
             f"🔮 今日塔罗牌：【{card}】\n"
             f"═══════════════════\n"
             f"🎁 {desc}\n"
-            f"✨ 效果：{effect_desc}\n"
+            f"🎁 效果：{effect_desc}\n"
             f"🎁 抽取时间：{draw_time}"
         )
     
@@ -1949,7 +1955,7 @@ class EconomyPlugin(Star):
         user_id = str(event.get_sender_id())
         bank_info = await self.bank_service.get_bank_info(user_id)
         
-        vip_status = "🎁 贵宾卡生效中（利率1.5%，取款免手续费）\n" if bank_info['has_vip'] else ""
+        vip_status = "🎁 贵宾卡生效中（利率1.5%，取款免手续费）\n" if bank_info["has_vip"] else ""
         
         msg = (
             f"🏦 我的银行\n"
@@ -1974,19 +1980,19 @@ class EconomyPlugin(Star):
             if amount <= 0:
                 raise ValueError()
         except:
-            yield event.plain_result("�� 用法：/存款 100")
+            yield event.plain_result("? 用法：/存款 100")
             return
         
         result = await self.bank_service.deposit(user_id, amount)
-        if not result['success']:
-            yield event.plain_result(result['message'])
+        if not result["success"]:
+            yield event.plain_result(result["message"])
             return
         
-        vip_str = "（贵宾卡生效）" if result['has_vip'] else ""
+        vip_str = "（贵宾卡生效）" if result["has_vip"] else ""
         
         yield event.plain_result(
             f"⛔ 存款成功！\n"
-            f"🏦 银行存款：{format_num(result['new_bank'])}星声\n"
+            f"🎁 银行存款：{format_num(result['new_bank'])}星声\n"
             f"📦 剩余抽卡资源：{format_num(result['new_cash'])}星声\n"
             f"📈 日息{result['rate_pct']}%{vip_str}"
         )
@@ -2004,15 +2010,15 @@ class EconomyPlugin(Star):
             if amount <= 0:
                 raise ValueError()
         except:
-            yield event.plain_result("�� 用法：/取款 100")
+            yield event.plain_result("? 用法：/取款 100")
             return
         
         result = await self.bank_service.withdraw(user_id, amount)
-        if not result['success']:
-            yield event.plain_result(result['message'])
+        if not result["success"]:
+            yield event.plain_result(result["message"])
             return
         
-        fee_str = "0（贵宾卡免手续费）" if result['has_vip'] else f"{result['fee']}（0.1%）"
+        fee_str = "0（贵宾卡免手续费）" if result["has_vip"] else f"{result['fee']}（0.1%）"
         
         yield event.plain_result(
             f"⛔ 取款成功！\n"
@@ -2036,7 +2042,7 @@ class EconomyPlugin(Star):
             limit = f"（每日限购{info['daily_limit']}次）" if info['daily_limit'] > 0 else "（永久有效）"
             lines.append(f"📦 {name}")
             lines.append(f"💰 价格：{format_num(info['price'])}星声{limit}")
-            lines.append(f"📝 {info['desc']}")
+            lines.append(f"📝 {info["desc"]}")
             lines.append("")
         
         lines.append(f"⚠️ 注意：每日最多占卜{CONFIG.LOTTERY_LIMIT}次")
@@ -2053,7 +2059,7 @@ class EconomyPlugin(Star):
         parts = event.message_str.split()
         
         if len(parts) < 2:
-            yield event.plain_result("�� 用法：/购买 商品名 数量")
+            yield event.plain_result("? 用法：/购买 商品名 数量")
             return
         
         item_name = parts[1]
@@ -2065,8 +2071,8 @@ class EconomyPlugin(Star):
             count = 1
         
         result = await self.shop_service.buy_item(user_id, item_name, count)
-        if not result['success']:
-            yield event.plain_result(result['message'])
+        if not result["success"]:
+            yield event.plain_result(result["message"])
             return
         
         # 检查成就
@@ -2075,7 +2081,7 @@ class EconomyPlugin(Star):
         yield event.plain_result(
             f"⛔ 购买成功！\n"
             f"🎁 {result['item_name']} x{result['count']}\n"
-            f"💸 花费：{format_num(result['total_price'])}星声\n"
+            f"🎁 花费：{format_num(result['total_price'])}星声\n"
             f"📦 剩余星声：{format_num(result['new_balance'])}星声"
         )
     
@@ -2088,18 +2094,18 @@ class EconomyPlugin(Star):
         inventory = await self.shop_service.get_inventory(user_id)
         
         # 检查花朵成就
-        if inventory['flower_count'] >= 99:
-            await self.achievement_service.check_achievements(user_id, "flower_check", {"count": inventory['flower_count']})
+        if inventory["flower_count"] >= 99:
+            await self.achievement_service.check_achievements(user_id, "flower_check", {"count": inventory["flower_count"]})
 
-        if not inventory['items']:
-            msg = "🎒 背包空空如也\n"
+        if not inventory["items"]:
+            msg = "🎁 背包空空如也\n"
         else:
-            msg = "👤 我的背包\n═══════════════════\n"
-            for name, qty in inventory['items']:
+            msg = "🎁 我的背包\n═══════════════════\n"
+            for name, qty in inventory["items"]:
                 msg += f"📦 {name} x{qty}\n"
 
-        msg += f"\n📅 今日剩余占卜次数：{inventory['remaining_lottery_count']}/{CONFIG.LOTTERY_LIMIT}次\n"
-        msg += "✨ 使用：/使用 占卜券 金额"
+        msg += f"\n🎁 今日剩余占卜次数：{inventory['remaining_lottery_count']}/{CONFIG.LOTTERY_LIMIT}次\n"
+        msg += "🎁 使用：/使用 占卜券 金额"
 
         yield event.plain_result(msg)
     
@@ -2112,7 +2118,7 @@ class EconomyPlugin(Star):
         parts = event.message_str.split()
 
         if len(parts) < 3:
-            yield event.plain_result("�� 用法：/使用 物品名称 数量")
+            yield event.plain_result("? 用法：/使用 物品名称 数量")
             return
 
         item_name = parts[1]
@@ -2122,7 +2128,7 @@ class EconomyPlugin(Star):
             if quantity <= 0:
                 raise ValueError()
         except:
-            yield event.plain_result("❌ 请输入有效的数量！")
+            yield event.plain_result("? 请输入有效的数量！")
             return
 
         # 获取好感值商品配置
@@ -2139,7 +2145,7 @@ class EconomyPlugin(Star):
                 row = await cursor.fetchone()
                 
                 if not row or row[0] < quantity:
-                    yield event.plain_result(f"❌ 你没有足够的{item_name}！")
+                    yield event.plain_result(f"? 你没有足够的{item_name}！")
                     return
                 
                 # 扣除物品
@@ -2166,7 +2172,7 @@ class EconomyPlugin(Star):
                 
                 await db.commit()
             
-            yield event.plain_result(f"❌ 使用成功！\n使用了 {quantity} 个{item_name}\n增加了 {favor_increase} 点好感值{achievement_msg}")
+            yield event.plain_result(f"? 使用成功！\n使用了 {quantity} 个{item_name}\n增加了 {favor_increase} 点好感值{achievement_msg}")
         
         # 处理占卜券
         elif item_name == "占卜券":
@@ -2175,41 +2181,41 @@ class EconomyPlugin(Star):
                 if bet <= 0:
                     raise ValueError()
             except:
-                yield event.plain_result("❌ 请输入有效的星声数量！")
+                yield event.plain_result("? 请输入有效的星声数量！")
                 return
 
             # 执行占卜
             result = await self.shop_service.do_lottery(user_id, bet, is_allin=False)
-            if not result['success']:
-                yield event.plain_result(result['message'])
+            if not result["success"]:
+                yield event.plain_result(result["message"])
                 return
             
             # 检查成就
-            await self.achievement_service.check_achievements(user_id, "lottery", {"multiplier": result['multiplier']})
+            await self.achievement_service.check_achievements(user_id, "lottery", {"multiplier": result["multiplier"]})
 
             # 构建结果消息
             multiplier_str = f"{result['multiplier']:.1f}x" if isinstance(result['multiplier'], float) else f"{result['multiplier']}x"
-            if result['profit'] >= 0:
+            if result["profit"] >= 0:
                 result_str = f"盈利：+{format_num(result['profit'])}星声 🎁"
             else:
                 result_str = f"亏损：{format_num(result['profit'])}星声 🎁"
 
-            allin_tag = "🎁 【ALL IN】 " if result['is_allin'] else ""
+            allin_tag = "🎁 【ALL IN】 " if result["is_allin"] else ""
 
             msg = (
                 f"{allin_tag}{result['result_emoji']} 占卜结果：{result['result_type']}！\n"
                 f"🎁 倍数：{multiplier_str}\n"
                 f"🎁 投入：{format_num(result['bet'])}星声 → 获得：{format_num(result['final'])}星声\n"
                 f"🎁 {result_str}\n"
-                f"📍 当前抽卡资源：{format_num(result['new_cash'])}星声\n"
+                f"🎁 当前抽卡资源：{format_num(result['new_cash'])}星声\n"
                 f"📦 剩余占卜券：{result['ticket_count']}张\n"
-                f"📅 今日占卜：{result['used_count']}/{CONFIG.LOTTERY_LIMIT}次"
+                f"🎁 今日占卜：{result['used_count']}/{CONFIG.LOTTERY_LIMIT}次"
             )
 
             yield event.plain_result(msg)
         
         else:
-            yield event.plain_result(f"❌ 无法使用该物品！")
+            yield event.plain_result(f"? 无法使用该物品！")
     
     @filter.command("赠送")
     async def cmd_gift(self, event: AstrMessageEvent):
@@ -2220,7 +2226,7 @@ class EconomyPlugin(Star):
         parts = event.message_str.split()
         
         if len(parts) < 2:
-            yield event.plain_result("�� 用法：/赠送 商品名 [数量]")
+            yield event.plain_result("? 用法：/赠送 商品名 [数量]")
             return
         
         item_name = parts[1]
@@ -2236,24 +2242,24 @@ class EconomyPlugin(Star):
         
         # 检查是否是好感值商品
         if item_name not in favor_items:
-            yield event.plain_result(f"❌ {item_name} 不是好感值商品，无法使用/赠送命令！")
+            yield event.plain_result(f"? {item_name} 不是好感值商品，无法使用/赠送命令！")
             return
         
         # 检查商品是否在商店中
         if item_name not in CONFIG.SHOP_ITEMS:
-            yield event.plain_result(f"❌ 商店中没有 {item_name}！")
+            yield event.plain_result(f"? 商店中没有 {item_name}！")
             return
         
         # 获取商品价格
         item_info = CONFIG.SHOP_ITEMS[item_name]
-        price = item_info['price']
+        price = item_info["price"]
         daily_limit = item_info.get("daily_limit", 0)
         total_price = price * quantity
         
         # 检查用户余额
         user = await self._get_user(user_id)
-        if user['balance'] < total_price:
-            yield event.plain_result(f"❌ 余额不足！需要 {format_num(total_price)} 星声，当前余额 {format_num(user['balance'])} 星声")
+        if user["balance"] < total_price:
+            yield event.plain_result(f"? 余额不足！需要 {format_num(total_price)} 星声，当前余额 {format_num(user['balance'])} 星声")
             return
         
         # 检查每日限购
@@ -2268,7 +2274,7 @@ class EconomyPlugin(Star):
                 
                 if purchased_today + quantity > daily_limit:
                     remaining = daily_limit - purchased_today
-                    yield event.plain_result(f"❌ 今日购买次数已达上限！还可购买 {remaining} 个")
+                    yield event.plain_result(f"? 今日购买次数已达上限！还可购买 {remaining} 个")
                     return
         
         # 扣除星声
@@ -2304,8 +2310,8 @@ class EconomyPlugin(Star):
         
         yield event.plain_result(
             f"⛔ 赠送成功！\n"
-            f"🛒 购买了 {quantity} 个{item_name}\n"
-            f"💸 花费：{format_num(total_price)}星声\n"
+            f"🎁 购买了 {quantity} 个{item_name}\n"
+            f"🎁 花费：{format_num(total_price)}星声\n"
             f"🎁 增加了 {favor_increase} 点好感值{achievement_msg}"
         )
     
@@ -2318,10 +2324,10 @@ class EconomyPlugin(Star):
 
         # 获取全部身家
         user = await self._get_user(user_id)
-        bet = user['balance']
+        bet = user["balance"]
 
         if bet <= 0:
-            yield event.plain_result("❌ 你没有星声可以Allin！")
+            yield event.plain_result("? 你没有星声可以Allin！")
             return
 
         # 检查是否有占卜券，如果没有则自动购买
@@ -2337,7 +2343,7 @@ class EconomyPlugin(Star):
             if not row or int(row[0]) <= 0:
                 # 没有占卜券，尝试自动购买
                 if bet < ticket_price:
-                    yield event.plain_result(f"❌ 你没有占卜券，且星声不足以购买（需要{ticket_price}星声）！")
+                    yield event.plain_result(f"? 你没有占卜券，且星声不足以购买（需要{ticket_price}星声）！")
                     return
                 
                 # 扣除星声并添加占卜券
@@ -2358,35 +2364,35 @@ class EconomyPlugin(Star):
                 bet -= ticket_price
                 
                 if bet <= 0:
-                    yield event.plain_result("❌ 购买占卜券后没有剩余星声可以Allin！")
+                    yield event.plain_result("? 购买占卜券后没有剩余星声可以Allin！")
                     return
 
         # 执行占卜
         result = await self.shop_service.do_lottery(user_id, bet, is_allin=True)
-        if not result['success']:
-            yield event.plain_result(result['message'])
+        if not result["success"]:
+            yield event.plain_result(result["message"])
             return
         
         # 检查成就
-        await self.achievement_service.check_achievements(user_id, "lottery", {"multiplier": result['multiplier']})
+        await self.achievement_service.check_achievements(user_id, "lottery", {"multiplier": result["multiplier"]})
 
         # 构建结果消息
         multiplier_str = f"{result['multiplier']:.1f}x" if isinstance(result['multiplier'], float) else f"{result['multiplier']}x"
-        if result['profit'] >= 0:
+        if result["profit"] >= 0:
             result_str = f"盈利：+{format_num(result['profit'])}星声 🎁"
         else:
             result_str = f"亏损：{format_num(result['profit'])}星声 🎁"
 
-        allin_tag = "🎁 【ALL IN】 " if result['is_allin'] else ""
+        allin_tag = "🎁 【ALL IN】 " if result["is_allin"] else ""
 
         msg = (
             f"{allin_tag}{result['result_emoji']} 占卜结果：{result['result_type']}！\n"
             f"🎁 倍数：{multiplier_str}\n"
             f"🎁 投入：{format_num(result['bet'])}星声 → 获得：{format_num(result['final'])}星声\n"
             f"🎁 {result_str}\n"
-            f"📍 当前抽卡资源：{format_num(result['new_cash'])}星声\n"
+            f"🎁 当前抽卡资源：{format_num(result['new_cash'])}星声\n"
             f"📦 剩余占卜券：{result['ticket_count']}张\n"
-            f"📅 今日占卜：{result['used_count']}/{CONFIG.LOTTERY_LIMIT}次"
+            f"🎁 今日占卜：{result['used_count']}/{CONFIG.LOTTERY_LIMIT}次"
         )
 
         yield event.plain_result(msg)
@@ -2400,9 +2406,9 @@ class EconomyPlugin(Star):
         prob_info = await self.shop_service.get_lottery_probability(user_id)
 
         lines = [
-            "🔮 占卜概率分布",
+            "🎁 占卜概率分布",
             "═══════════════════",
-            f"📅 今日剩余：{prob_info['remaining']}/{prob_info['limit']} 次",
+            f"🎁 今日剩余：{prob_info['remaining']}/{prob_info['limit']} 次",
             "",
             "倍数范围　　　│ 概率　 │ 结果　　　│",
             "──────────────┼───────┼───────────│"
@@ -2414,10 +2420,10 @@ class EconomyPlugin(Star):
         lines.extend([
             "",
             "💡 提示：",
-            "💡 最高可获得 66 倍奖励（1%概率）",
-            "💡 获得 5 倍以上可解锁「欧皇」成就",
-            "💡 使用：/使用 占卜券 金额",
-            "💡 Allin：/Allin"
+            "? 最高可获得 66 倍奖励（1%概率）",
+            "? 获得 5 倍以上可解锁「欧皇」成就",
+            "? 使用：/使用 占卜券 金额",
+            "? Allin：/Allin"
         ])
 
         yield event.plain_result("\n".join(lines))
@@ -2451,19 +2457,19 @@ class EconomyPlugin(Star):
         parts = event.message_str.split()
         
         if len(parts) < 2:
-            yield event.plain_result("�� 用法：/应聘 职业名")
+            yield event.plain_result("? 用法：/应聘 职业名")
             return
         
         work_name = parts[1]
         
         result = await self.work_service.apply_work(user_id, work_name)
-        if not result['success']:
-            yield event.plain_result(result['message'])
+        if not result["success"]:
+            yield event.plain_result(result["message"])
             return
         
         yield event.plain_result(
             f"⛔ 成功入职：{result['emoji']}{result['work_name']}！\n"
-            f"💸 花费：{format_num(result['price'])}星声\n"
+            f"🎁 花费：{format_num(result['price'])}星声\n"
             f"🎁 开始时间：{result['start_time']}"
         )
     
@@ -2475,22 +2481,22 @@ class EconomyPlugin(Star):
         user_id = str(event.get_sender_id())
         result = await self.work_service.get_work_status(user_id)
         
-        if not result['success']:
-            yield event.plain_result(result['message'])
+        if not result["success"]:
+            yield event.plain_result(result["message"])
             return
         
         msg = (
-            f"📍 当前工作：{result['emoji']}{result['work_name']}\n"
+            f"🎁 当前工作：{result['emoji']}{result['work_name']}\n"
             f"🎁 {result['desc']}\n"
             f"🎁 已工作：{result['hours_passed']}小时\n"
             f"🎁 预计可领：约{format_num(result['pending'])}星声\n"
             f"🎁 累计收入：{format_num(result['total_earned'])}星声\n"
         )
         
-        if result['hours_passed'] > 0:
-            msg += f"\n📤 发送 /领工资 领取{result['hours_passed']}小时工资"
+        if result["hours_passed"] > 0:
+            msg += f"\n🎁 发送 /领工资 领取{result['hours_passed']}小时工资"
         else:
-            msg += f"\n⏳ 还需工作{60 - datetime.now().minute}分钟可领工资"
+            msg += f"\n? 还需工作{60 - datetime.now().minute}分钟可领工资"
         
         yield event.plain_result(msg)
     
@@ -2502,14 +2508,14 @@ class EconomyPlugin(Star):
         user_id = str(event.get_sender_id())
         result = await self.work_service.claim_salary(user_id)
         
-        if not result['success']:
-            yield event.plain_result(result['message'])
+        if not result["success"]:
+            yield event.plain_result(result["message"])
             return
         
         yield event.plain_result(
-            f"💵 工资到账！\n"
+            f"🎁 工资到账！\n"
             f"🎁 职业：{result['emoji']}{result['work_name']}\n"
-            f"💼 工作时间：{result['hours']}小时\n"
+            f"🎁 工作时间：{result['hours']}小时\n"
             f" 获得工资：{format_num(result['total_earnings'])}星声\n"
             f" 当前余额：{format_num(result['new_balance'])}星声"
         )
@@ -2529,8 +2535,8 @@ class EconomyPlugin(Star):
             "🎁 索拉里斯证券交易所",
             "═══════════════════",
             f"🎁 市场情绪：{sentiment}",
-            "⏰ 价格每10分钟刷新",
-            "📜 指令：/买入 股票名 数量 | /卖出 股票名 数量 | /持仓 | /股东 股票名",
+            "? 价格每10分钟刷新",
+            "🎁 指令：/买入 股票名 数量 | /卖出 股票名 数量 | /持仓 | /股东 股票名",
             "═══════════════════"
         ]
         
@@ -2552,7 +2558,7 @@ class EconomyPlugin(Star):
         parts = event.message_str.split()
         
         if len(parts) < 3:
-            yield event.plain_result("�� 用法：/买入 股票名 数量")
+            yield event.plain_result("? 用法：/买入 股票名 数量")
             return
         
         stock_name = parts[1]
@@ -2561,18 +2567,18 @@ class EconomyPlugin(Star):
             if quantity <= 0:
                 raise ValueError()
         except:
-            yield event.plain_result("❌ 数量格式错误")
+            yield event.plain_result("? 数量格式错误")
             return
         
         result = await self.stock_service.buy_stock(user_id, stock_name, quantity)
-        if not result['success']:
-            yield event.plain_result(result['message'])
+        if not result["success"]:
+            yield event.plain_result(result["message"])
             return
         
         yield event.plain_result(
             f"⛔ 买入成功！\n"
             f"🎁 {result['stock_name']}\n"
-            f"📥 买入价：{result['price']:.2f}\n"
+            f"🎁 买入价：{result['price']:.2f}\n"
             f" 数量：{result['quantity']}\n"
             f" 花费：{format_num(result['total_cost'])}星声"
         )
@@ -2586,7 +2592,7 @@ class EconomyPlugin(Star):
         parts = event.message_str.split()
         
         if len(parts) < 3:
-            yield event.plain_result("�� 用法：/卖出 股票名 数量")
+            yield event.plain_result("? 用法：/卖出 股票名 数量")
             return
         
         stock_name = parts[1]
@@ -2595,18 +2601,18 @@ class EconomyPlugin(Star):
             if want_sell <= 0:
                 raise ValueError()
         except:
-            yield event.plain_result("❌ 数量格式错误")
+            yield event.plain_result("? 数量格式错误")
             return
         
         result = await self.stock_service.sell_stock(user_id, stock_name, want_sell)
-        if not result['success']:
-            yield event.plain_result(result['message'])
+        if not result["success"]:
+            yield event.plain_result(result["message"])
             return
         
         yield event.plain_result(
             f"⛔ 卖出成功！\n"
             f"🎁 {result['stock_name']}\n"
-            f"📤 卖出价：{result['price']:.2f}\n"
+            f"🎁 卖出价：{result['price']:.2f}\n"
             f"🎁 数量：{result['quantity']}\n"
             f"🎁 成交额：{format_num(result['sell_amount'])}星声\n"
             f"🎁 手续费：{format_num(result['fee'])}\n"
@@ -2621,13 +2627,13 @@ class EconomyPlugin(Star):
         user_id = str(event.get_sender_id())
         result = await self.stock_service.get_portfolio(user_id)
         
-        if not result['success']:
-            yield event.plain_result(result['message'])
+        if not result["success"]:
+            yield event.plain_result(result["message"])
             return
         
-        lines = ["👤 我的持仓", "═══════════════════"]
+        lines = ["🎁 我的持仓", "═══════════════════"]
         
-        for item in result['portfolio']:
+        for item in result["portfolio"]:
             lines.append(f"{item['emoji']} {item['stock_name']}")
             lines.append(f"   🎁 持有：{item['quantity']:.2f} | 成本：{item['avg_cost']:.2f}")
             lines.append(f"   🎁 现价：{item['current_price']:.2f} | 市值：{format_num(item['market_value'])}")
@@ -2661,14 +2667,14 @@ class EconomyPlugin(Star):
             if init_price < 1 or init_price > 10000:
                 raise ValueError()
         except:
-            yield event.plain_result("❌ 初始股价需在1-10000之间")
+            yield event.plain_result("? 初始股价需在1-10000之间")
             return
         
         desc = " ".join(parts[3:]) if len(parts) > 3 else "玩家创立的企业"
         
         result = await self.stock_service.create_company(user_id, company_name, init_price, desc)
-        if not result['success']:
-            yield event.plain_result(result['message'])
+        if not result["success"]:
+            yield event.plain_result(result["message"])
             return
         
         yield event.plain_result(
@@ -2676,7 +2682,7 @@ class EconomyPlugin(Star):
             f"🎁 {result['company_name']}\n"
             f"🎁 初始股价：{result['init_price']:.2f}星声\n"
             f" {result['desc']}\n"
-            f"🚀 启动资金：{format_num(result['required'])}星声\n"
+            f"🎁 启动资金：{format_num(result['required'])}星声\n"
             f" 您获得10万股创始股份"
         )
     
@@ -2695,8 +2701,8 @@ class EconomyPlugin(Star):
         company_name = parts[1]
         
         result = await self.stock_service.bankrupt(user_id, company_name)
-        if not result['success']:
-            yield event.plain_result(result['message'])
+        if not result["success"]:
+            yield event.plain_result(result["message"])
             return
         
         yield event.plain_result(
@@ -2722,12 +2728,12 @@ class EconomyPlugin(Star):
             if amount < 10000:
                 raise ValueError()
         except:
-            yield event.plain_result("❌ 研发资金至少10000星声")
+            yield event.plain_result("? 研发资金至少10000星声")
             return
         
         result = await self.stock_service.research(user_id, company_name, amount)
-        if not result['success']:
-            yield event.plain_result(result['message'])
+        if not result["success"]:
+            yield event.plain_result(result["message"])
             return
         
         yield event.plain_result(
@@ -2753,13 +2759,13 @@ class EconomyPlugin(Star):
         stock_name = parts[1]
         
         result = await self.stock_service.get_shareholders(stock_name)
-        if not result['success']:
-            yield event.plain_result(result['message'])
+        if not result["success"]:
+            yield event.plain_result(result["message"])
             return
         
         lines = [f"🎁 {result['stock_name']} 股东列表", "═══════════════════"]
         
-        if result['controlling_shareholder']:
+        if result["controlling_shareholder"]:
             lines.append(f"🎁 控股股东：{result['controlling_shareholder']['name']}")
             lines.append("")
         
@@ -2768,14 +2774,14 @@ class EconomyPlugin(Star):
         lines.append("股东列表：")
         lines.append("─────────────────────")
         
-        for shareholder in result['shareholders']:
+        for shareholder in result["shareholders"]:
             lines.append(f"{shareholder['name']}: {shareholder['shares']:.2f}股 ({shareholder['ratio']:.2f}%)")
         
         yield event.plain_result("\n".join(lines))
     
     @filter.command("k线")
     async def cmd_stock_kline(self, event: AstrMessageEvent):
-        """查看股票最近24小时价格走势"""
+        """查看股票k线"""
         await self._ensure_db()
         
         user_id = str(event.get_sender_id())
@@ -2788,18 +2794,21 @@ class EconomyPlugin(Star):
         stock_name = parts[1]
         
         result = await self.stock_service.get_stock_kline(stock_name)
-        if not result['success']:
-            yield event.plain_result(result['message'])
+        if not result["success"]:
+            yield event.plain_result(result["message"])
             return
         
-        lines = [f"📈 {result['stock_name']} 最近24小时价格", "═══════════════════"]
+        lines = [f"🎁 {result['stock_name']} 最近24小时K线", "═══════════════════"]
+        lines.append("时间          | 开盘   | 最高   | 最低   | 收盘   | 成交量")
+        lines.append("──────────────┼───────┼───────┼───────┼───────┼───────")
         
-        # 显示所有数据点（每10分钟一个）
-        price_data = result['price_data']
-        for data in price_data:
-            # 只显示时间和价格，格式：MM-DD HH:MM | 价格
-            time_display = data['timestamp'][5:]  # 去掉年份
-            lines.append(f"{time_display} | {data['price']:.2f}")
+        # 只显示最近6小时的数据，避免消息过长
+        recent_data = result["kline_data"][-6:]
+        for data in recent_data:
+            lines.append(f"{data['timestamp']} | {data['open']:>6} | {data['high']:>6} | {data['low']:>6} | {data['close']:>6} | {data['volume']:>6}")
+        
+        lines.append("")
+        lines.append("💡 提示：显示最近6小时数据")
         
         yield event.plain_result("\n".join(lines))
     
@@ -2813,14 +2822,14 @@ class EconomyPlugin(Star):
         
         lines = [" 索拉里斯秘密结社", "═══════════════════"]
         
-        if stats['total'] == 0:
+        if stats["total"] == 0:
             lines.append("目前还没有人加入任何结社")
         else:
             lines.append(f"🎁 总成员：{stats['total']} 人")
             lines.append("")
             
             for name, config in CONFIG.SOCIETIES.items():
-                data = stats['stats'].get(name, {"count": 0, "percentage": 0})
+                data = stats["stats"].get(name, {"count": 0, "percentage": 0})
                 lines.append(f"{config['emoji']} {name}")
                 lines.append(f"   🎁 人数：{data['count']} 人 ({data['percentage']:.1f}%)")
                 lines.append(f"   🎁 {config['desc']}")
@@ -2845,8 +2854,8 @@ class EconomyPlugin(Star):
         society_name = parts[1]
         
         result = await self.society_service.join_society(user_id, society_name)
-        if not result['success']:
-            yield event.plain_result(result['message'])
+        if not result["success"]:
+            yield event.plain_result(result["message"])
             return
         
         yield event.plain_result(
@@ -2862,8 +2871,8 @@ class EconomyPlugin(Star):
         user_id = str(event.get_sender_id())
         result = await self.society_service.get_my_society(user_id)
 
-        if not result['success']:
-            yield event.plain_result(result['message'])
+        if not result["success"]:
+            yield event.plain_result(result["message"])
             return
 
         lines = [
@@ -2871,26 +2880,26 @@ class EconomyPlugin(Star):
             "═══════════════════",
             f"🎁 {result['desc']}",
             f"🎁 成员：{result['member_count']}人",
-            f"➕ 加入时间：{result['join_time']}"
+            f"🎁 加入时间：{result['join_time']}"
         ]
 
         # 显示结社福利
         if result.get("benefits"):
             lines.append("")
-            lines.append("🏛️ 结社福利：")
+            lines.append("🎁 结社福利：")
             lines.append(f"   {result['benefits']['type']}：{result['benefits']['detail']}")
 
         # 显示结社第一
-        if result.get("top_user") and result['top_user']:
+        if result.get("top_user") and result["top_user"]:
             lines.append("")
-            top_user = result['top_user']
-            if top_user['is_me']:
+            top_user = result["top_user"]
+            if top_user["is_me"]:
                 lines.append(f"🎁 {top_user['title']}：{top_user['name']}（你）")
             else:
                 lines.append(f"🎁 {top_user['title']}：{top_user['name']}")
             lines.append(f"   资产：{format_num(top_user['asset'])}星声")
 
         lines.append("")
-        lines.append(f"⏳ 更换冷却：{result['cooldown']}小时")
+        lines.append(f"? 更换冷却：{result['cooldown']}小时")
 
         yield event.plain_result("\n".join(lines))
