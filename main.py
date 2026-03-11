@@ -2913,23 +2913,23 @@ class EconomyPlugin(Star):
     # ============== 公告功能 ==============
     @filter.permission_type(filter.PermissionType.ADMIN)
     @filter.command("发布公告")
-    async def cmd_publish_announcement(self, event: AstrMessageEvent, *, content: str = ""):
+    async def cmd_publish_announcement(self, event: AstrMessageEvent):
         """发布公告到所有群 - /发布公告 <内容>"""
         await self._ensure_db()
         
         user_id = str(event.get_sender_id())
         sender_name = self._get_sender_name(event)
         
-        # 获取公告内容
-        msg_text = event.get_message_text()
+        # 获取公告内容 - 使用 message_str 获取完整消息
+        msg_text = event.message_str
         args = msg_text.split(maxsplit=1)
         if len(args) < 2:
-            yield event.plain_result("? 请输入公告内容：/发布公告 <内容>")
+            yield event.plain_result("📢 请输入公告内容：/发布公告 <内容>")
             return
         
         content = args[1].strip()
         if not content:
-            yield event.plain_result("? 公告内容不能为空！")
+            yield event.plain_result("📢 公告内容不能为空！")
             return
         
         # 发布公告到数据库
@@ -2942,14 +2942,14 @@ class EconomyPlugin(Star):
         )
         
         if not result["success"]:
-            yield event.plain_result(f"? 发布公告失败：{result.get('message', '未知错误')}")
+            yield event.plain_result(f"📢 发布公告失败：{result.get('message', '未知错误')}")
             return
         
         # 广播到所有群
         broadcast_result = await self._broadcast_announcement(event, content)
         
         yield event.plain_result(
-            f"? 公告发布成功！\n"
+            f"📢 公告发布成功！\n"
             f"内容：{content[:50]}{'...' if len(content) > 50 else ''}\n"
             f"广播结果：成功 {broadcast_result['success']} 个群，失败 {broadcast_result['failed']} 个群"
         )
@@ -2960,33 +2960,70 @@ class EconomyPlugin(Star):
         failed_count = 0
         
         try:
-            # 获取所有群列表
-            if hasattr(event, 'bot') and event.bot:
+            # 使用 context 获取平台管理器
+            if hasattr(self, 'context') and self.context:
                 try:
-                    groups = await event.bot.get_group_list()
+                    # 获取所有平台实例
+                    platform_insts = self.context.platform_manager.platform_insts
                     
-                    for group in groups:
+                    for platform in platform_insts:
                         try:
-                            group_id = group.get('group_id')
-                            if group_id:
-                                # 构造公告消息
-                                announcement_msg = f"?【系统公告】?\n═══════════════════\n{content}\n═══════════════════\n? 发布时间：{datetime.now().strftime('%Y-%m-%d %H:%M')}"
+                            # 获取平台适配器
+                            adapter = platform
+                            if hasattr(adapter, 'bot'):
+                                bot = adapter.bot
+                                # 获取群列表
+                                groups = await bot.get_group_list()
                                 
-                                # 发送群消息
-                                await event.bot.api.call_action(
-                                    "send_group_msg",
-                                    group_id=int(group_id),
-                                    message=[{"type": "text", "data": {"text": announcement_msg}}]
-                                )
-                                success_count += 1
+                                for group in groups:
+                                    try:
+                                        group_id = group.get('group_id')
+                                        if group_id:
+                                            # 构造公告消息
+                                            announcement_msg = f"📢【系统公告】📢\n═══════════════════\n{content}\n═══════════════════\n⏰ 发布时间：{datetime.now().strftime('%Y-%m-%d %H:%M')}"
+                                            
+                                            # 发送群消息
+                                            await bot.api.call_action(
+                                                "send_group_msg",
+                                                group_id=int(group_id),
+                                                message=[{"type": "text", "data": {"text": announcement_msg}}]
+                                            )
+                                            success_count += 1
+                                    except Exception as e:
+                                        logger.warning(f"广播到群 {group.get('group_id')} 失败: {e}")
+                                        failed_count += 1
                         except Exception as e:
-                            logger.warning(f"广播到群 {group.get('group_id')} 失败: {e}")
-                            failed_count += 1
+                            logger.warning(f"获取平台群列表失败: {e}")
+                            continue
                 except Exception as e:
-                    logger.warning(f"获取群列表失败: {e}")
+                    logger.warning(f"获取平台实例失败: {e}")
                     failed_count = 1
             else:
-                failed_count = 1
+                # 尝试使用 event.bot
+                if hasattr(event, 'bot') and event.bot:
+                    try:
+                        groups = await event.bot.get_group_list()
+                        
+                        for group in groups:
+                            try:
+                                group_id = group.get('group_id')
+                                if group_id:
+                                    announcement_msg = f"📢【系统公告】📢\n═══════════════════\n{content}\n═══════════════════\n⏰ 发布时间：{datetime.now().strftime('%Y-%m-%d %H:%M')}"
+                                    
+                                    await event.bot.api.call_action(
+                                        "send_group_msg",
+                                        group_id=int(group_id),
+                                        message=[{"type": "text", "data": {"text": announcement_msg}}]
+                                    )
+                                    success_count += 1
+                            except Exception as e:
+                                logger.warning(f"广播到群 {group.get('group_id')} 失败: {e}")
+                                failed_count += 1
+                    except Exception as e:
+                        logger.warning(f"获取群列表失败: {e}")
+                        failed_count = 1
+                else:
+                    failed_count = 1
         except Exception as e:
             logger.error(f"广播公告时出错: {e}")
             failed_count = 1
@@ -3002,16 +3039,16 @@ class EconomyPlugin(Star):
         announcement = await self.announcement_service.get_latest_announcement()
         
         if not announcement:
-            yield event.plain_result("? 暂无公告")
+            yield event.plain_result("📢 暂无公告")
             return
         
         lines = [
-            f"?【{announcement['title']}】?",
+            f"📢【{announcement['title']}】📢",
             "═══════════════════",
             f"{announcement['content']}",
             "═══════════════════",
-            f"? 发布者：{announcement['author_name']}",
-            f"? 发布时间：{announcement['publish_time']}"
+            f"👤 发布者：{announcement['author_name']}",
+            f"⏰ 发布时间：{announcement['publish_time']}"
         ]
         
         yield event.plain_result("\n".join(lines))
@@ -3025,10 +3062,10 @@ class EconomyPlugin(Star):
         announcements = await self.announcement_service.get_announcements(limit=10)
         
         if not announcements:
-            yield event.plain_result("? 暂无公告")
+            yield event.plain_result("📢 暂无公告")
             return
         
-        lines = ["?【历史公告列表】?", "═══════════════════"]
+        lines = ["📋【历史公告列表】📋", "═══════════════════"]
         
         for i, ann in enumerate(announcements, 1):
             content_preview = ann['content'][:30] + "..." if len(ann['content']) > 30 else ann['content']
@@ -3036,8 +3073,8 @@ class EconomyPlugin(Star):
             lines.append(f"   内容：{content_preview}")
             lines.append(f"   时间：{ann['publish_time']}")
             lines.append("")
-        
-        lines.append(f"? 共 {len(announcements)} 条公告")
-        lines.append("? 使用 /公告 查看最新公告")
+
+        lines.append(f"📊 共 {len(announcements)} 条公告")
+        lines.append("💡 使用 /公告 查看最新公告")
         
         yield event.plain_result("\n".join(lines))
