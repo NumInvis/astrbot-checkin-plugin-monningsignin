@@ -2911,13 +2911,18 @@ class EconomyPlugin(Star):
         yield event.plain_result("\n".join(lines))
 
     # ============== 公告功能 ==============
-    @filter.permission_type(filter.PermissionType.ADMIN)
     @filter.command("发布公告")
     async def cmd_publish_announcement(self, event: AstrMessageEvent):
         """发布公告到所有群 - /发布公告 <内容>"""
+        user_id = str(event.get_sender_id())
+        
+        # 检查是否为管理员
+        if user_id not in CONFIG.ADMIN_IDS:
+            yield event.plain_result("⚠️ 权限不足！此命令仅管理员可用")
+            return
+        
         await self._ensure_db()
         
-        user_id = str(event.get_sender_id())
         sender_name = self._get_sender_name(event)
         
         # 获取公告内容 - 使用 message_str 获取完整消息
