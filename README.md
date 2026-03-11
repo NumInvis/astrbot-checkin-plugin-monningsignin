@@ -1,4 +1,4 @@
-# 莫宁宁的币 - AstrBot 经济系统插件
+# 莫宁宁的币 - AstrBot 经济系统插件 v1.0
 
 [![GitHub stars](https://img.shields.io/github/stars/MTMASTER-star/astrbot-checkin-plugin-monningsignin?style=social)](https://github.com/MTMASTER-star/astrbot-checkin-plugin-monningsignin/stargazers)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
