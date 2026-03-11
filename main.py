@@ -2964,8 +2964,8 @@ class EconomyPlugin(Star):
         success_count = 0
         failed_count = 0
         
-        # 获取白名单
-        whitelist = CONFIG.ANNOUNCEMENT_WHITELIST
+        # 获取白名单（使用 getattr 提供默认值，兼容旧配置）
+        whitelist = getattr(CONFIG, 'ANNOUNCEMENT_WHITELIST', ["1047215229", "468563035", "1078585038"])
         if not whitelist:
             logger.warning("公告白名单为空，无法广播")
             return {"success": 0, "failed": 0, "skipped": 0}
@@ -3103,9 +3103,11 @@ class EconomyPlugin(Star):
         msg_text = event.message_str
         args = msg_text.split()
         
+        # 获取白名单（使用 getattr 提供默认值，兼容旧配置）
+        whitelist = getattr(CONFIG, 'ANNOUNCEMENT_WHITELIST', ["1047215229", "468563035", "1078585038"])
+        
         if len(args) < 2:
             # 显示当前白名单
-            whitelist = CONFIG.ANNOUNCEMENT_WHITELIST
             if not whitelist:
                 yield event.plain_result("📋 当前公告白名单为空\n💡 用法：/公告白名单 add 群号\n   /公告白名单 remove 群号\n   /公告白名单 list")
                 return
@@ -3125,7 +3127,6 @@ class EconomyPlugin(Star):
         
         if action == "list":
             # 列出白名单
-            whitelist = CONFIG.ANNOUNCEMENT_WHITELIST
             if not whitelist:
                 yield event.plain_result("📋 当前公告白名单为空")
                 return
@@ -3148,12 +3149,12 @@ class EconomyPlugin(Star):
                 yield event.plain_result("❌ 群号必须是数字！")
                 return
             
-            if group_id in CONFIG.ANNOUNCEMENT_WHITELIST:
+            if group_id in whitelist:
                 yield event.plain_result(f"📢 群 {group_id} 已在白名单中")
                 return
             
-            CONFIG.ANNOUNCEMENT_WHITELIST.append(group_id)
-            yield event.plain_result(f"✅ 已添加群 {group_id} 到白名单\n📊 当前白名单共 {len(CONFIG.ANNOUNCEMENT_WHITELIST)} 个群")
+            whitelist.append(group_id)
+            yield event.plain_result(f"✅ 已添加群 {group_id} 到白名单\n📊 当前白名单共 {len(whitelist)} 个群")
         
         elif action == "remove":
             # 从白名单移除群
@@ -3162,12 +3163,12 @@ class EconomyPlugin(Star):
                 return
             
             group_id = args[2].strip()
-            if group_id not in CONFIG.ANNOUNCEMENT_WHITELIST:
+            if group_id not in whitelist:
                 yield event.plain_result(f"📢 群 {group_id} 不在白名单中")
                 return
             
-            CONFIG.ANNOUNCEMENT_WHITELIST.remove(group_id)
-            yield event.plain_result(f"✅ 已从白名单移除群 {group_id}\n📊 当前白名单共 {len(CONFIG.ANNOUNCEMENT_WHITELIST)} 个群")
+            whitelist.remove(group_id)
+            yield event.plain_result(f"✅ 已从白名单移除群 {group_id}\n📊 当前白名单共 {len(whitelist)} 个群")
         
         else:
             yield event.plain_result("❌ 未知操作！\n💡 用法：/公告白名单 add 群号\n   /公告白名单 remove 群号\n   /公告白名单 list")
