@@ -47,16 +47,23 @@ def generate_stock_chart(stock_name: str, price_data: List[Dict], width: int = 8
     max_price += price_padding
     price_range = max_price - min_price
     
-    # 绘制标题
+    # 绘制标题 - 使用支持中文的字体
     try:
-        title_font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 28)
-        price_font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 16)
-        label_font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 12)
+        # 优先使用支持中文的 Noto Sans CJK
+        title_font = ImageFont.truetype("/usr/share/fonts/google-noto-cjk/NotoSansCJK-Bold.ttc", 28)
+        price_font = ImageFont.truetype("/usr/share/fonts/google-noto-cjk/NotoSansCJK-Regular.ttc", 16)
+        label_font = ImageFont.truetype("/usr/share/fonts/google-noto-cjk/NotoSansCJK-Regular.ttc", 12)
     except:
-        # 如果找不到字体，使用默认字体
-        title_font = ImageFont.load_default()
-        price_font = ImageFont.load_default()
-        label_font = ImageFont.load_default()
+        try:
+            # 备用：使用 DejaVu 字体（不支持中文，但英文显示更好）
+            title_font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 28)
+            price_font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 16)
+            label_font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 12)
+        except:
+            # 如果都找不到，使用默认字体
+            title_font = ImageFont.load_default()
+            price_font = ImageFont.load_default()
+            label_font = ImageFont.load_default()
     
     # 标题
     title = f"📈 {stock_name} 价格走势"
@@ -131,15 +138,19 @@ def generate_empty_chart(stock_name: str, width: int = 800, height: int = 500) -
     """生成空数据提示图"""
     img = Image.new('RGB', (width, height), color=(30, 30, 30))
     draw = ImageDraw.Draw(img)
-    
+
+    # 使用支持中文的字体
     try:
-        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 32)
+        font = ImageFont.truetype("/usr/share/fonts/google-noto-cjk/NotoSansCJK-Bold.ttc", 32)
     except:
-        font = ImageFont.load_default()
-    
+        try:
+            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 32)
+        except:
+            font = ImageFont.load_default()
+
     text = f"📈 {stock_name}\n暂无价格数据"
     draw.text((width // 2 - 150, height // 2 - 40), text, fill=(200, 200, 200), font=font)
-    
+
     img_byte_arr = io.BytesIO()
     img.save(img_byte_arr, format='PNG', optimize=True)
     img_byte_arr.seek(0)
