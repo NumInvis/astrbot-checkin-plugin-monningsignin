@@ -49,10 +49,10 @@ def generate_stock_chart(stock_name: str, price_data: List[Dict], width: int = 8
     
     # 绘制标题 - 使用支持中文的字体
     try:
-        # 优先使用支持中文的 Noto Sans CJK
-        title_font = ImageFont.truetype("/usr/share/fonts/google-noto-cjk/NotoSansCJK-Bold.ttc", 28)
-        price_font = ImageFont.truetype("/usr/share/fonts/google-noto-cjk/NotoSansCJK-Regular.ttc", 16)
-        label_font = ImageFont.truetype("/usr/share/fonts/google-noto-cjk/NotoSansCJK-Regular.ttc", 12)
+        # 优先使用支持中文的 Noto Sans CJK（已复制到容器）
+        title_font = ImageFont.truetype("/usr/share/fonts/truetype/NotoSansCJK-Bold.ttc", 28)
+        price_font = ImageFont.truetype("/usr/share/fonts/truetype/NotoSansCJK-Regular.ttc", 16)
+        label_font = ImageFont.truetype("/usr/share/fonts/truetype/NotoSansCJK-Regular.ttc", 12)
     except:
         try:
             # 备用：使用 DejaVu 字体（不支持中文，但英文显示更好）
@@ -141,7 +141,7 @@ def generate_empty_chart(stock_name: str, width: int = 800, height: int = 500) -
 
     # 使用支持中文的字体
     try:
-        font = ImageFont.truetype("/usr/share/fonts/google-noto-cjk/NotoSansCJK-Bold.ttc", 32)
+        font = ImageFont.truetype("/usr/share/fonts/truetype/NotoSansCJK-Bold.ttc", 32)
     except:
         try:
             font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 32)
