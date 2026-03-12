@@ -2790,7 +2790,7 @@ class EconomyPlugin(Star):
     
     @filter.command("k线")
     async def cmd_stock_kline(self, event: AstrMessageEvent):
-        """查看股票价格走势"""
+        """查看股票价格走势（带图表）"""
         await self._ensure_db()
 
         user_id = str(event.get_sender_id())
@@ -2807,18 +2807,68 @@ class EconomyPlugin(Star):
             yield event.plain_result(result["message"])
             return
 
-        lines = [f"📈 {result['stock_name']} 最近24小时价格走势", "═══════════════════"]
-
         price_data = result.get("price_data", [])
         if not price_data:
-            lines.append("📊 暂无价格数据")
-        else:
-            lines.append("时间           | 价格")
-            lines.append("───────────────┼─────────")
+            yield event.plain_result(f"📈 {result['stock_name']} 最近24小时价格走势\n═══════════════════\n📊 暂无价格数据")
+            return
 
-            # 显示所有数据（每10分钟一个点）
-            for data in price_data:
-                lines.append(f"{data['timestamp']} | {data['price']:>8}")
+        lines = [f"📈 {result['stock_name']} 最近24小时价格走势", "═══════════════════"]
+
+        # 生成文本图表
+        prices = [d['price'] for d in price_data]
+        min_price = min(prices)
+        max_price = max(prices)
+        price_range = max_price - min_price if max_price != min_price else 1
+
+        # 图表高度为10行
+        chart_height = 10
+        chart_width = min(len(price_data), 30)  # 最多显示30个数据点
+
+        lines.append("")
+        lines.append("价格/时间 →")
+
+        # 生成图表每一行
+        for row in range(chart_height, -1, -1):
+            price_level = min_price + (price_range * row / chart_height)
+
+            # 价格标签
+            if row == chart_height:
+                label = f"{max_price:>8.2f} ┤"
+            elif row == 0:
+                label = f"{min_price:>8.2f} ┤"
+            else:
+                label = "         │"
+
+            # 绘制价格点
+            line = label
+            for i in range(chart_width):
+                if i < len(price_data):
+                    price = price_data[i]['price']
+                    # 计算该价格应该在哪个高度
+                    price_row = int((price - min_price) / price_range * chart_height) if price_range > 0 else chart_height // 2
+                    if price_row == row:
+                        line += "●"
+                    elif price_row > row:
+                        line += "│"
+                    else:
+                        line += " "
+                else:
+                    line += " "
+
+            lines.append(line)
+
+        # 底部横线
+        lines.append("         └" + "─" * chart_width)
+
+        # 时间标签（只显示首尾）
+        if len(price_data) > 0:
+            first_time = price_data[0]['timestamp'].split()[1] if ' ' in price_data[0]['timestamp'] else price_data[0]['timestamp']
+            last_time = price_data[-1]['timestamp'].split()[1] if ' ' in price_data[-1]['timestamp'] else price_data[-1]['timestamp']
+            time_label = f"         {first_time:<{chart_width-5}}{last_time}"
+            lines.append(time_label)
+
+        lines.append("")
+        lines.append(f"📊 数据点: {len(price_data)}个 | 最高: {max_price:.2f} | 最低: {min_price:.2f}")
 
         yield event.plain_result("\n".join(lines))
     
