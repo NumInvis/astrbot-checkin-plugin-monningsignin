@@ -2790,35 +2790,36 @@ class EconomyPlugin(Star):
     
     @filter.command("k线")
     async def cmd_stock_kline(self, event: AstrMessageEvent):
-        """查看股票k线"""
+        """查看股票价格走势"""
         await self._ensure_db()
-        
+
         user_id = str(event.get_sender_id())
         parts = event.message_str.split()
-        
+
         if len(parts) < 2:
             yield event.plain_result("💡 用法：/k线 股票名")
             return
-        
+
         stock_name = parts[1]
-        
+
         result = await self.stock_service.get_stock_kline(stock_name)
         if not result["success"]:
             yield event.plain_result(result["message"])
             return
-        
-        lines = [f"🎁 {result['stock_name']} 最近24小时K线", "═══════════════════"]
-        lines.append("时间          | 开盘   | 最高   | 最低   | 收盘   | 成交量")
-        lines.append("──────────────┼───────┼───────┼───────┼───────┼───────")
-        
-        # 只显示最近6小时的数据，避免消息过长
-        recent_data = result["kline_data"][-6:]
-        for data in recent_data:
-            lines.append(f"{data['timestamp']} | {data['open']:>6} | {data['high']:>6} | {data['low']:>6} | {data['close']:>6} | {data['volume']:>6}")
-        
-        lines.append("")
-        lines.append("💡 提示：显示最近6小时数据")
-        
+
+        lines = [f"📈 {result['stock_name']} 最近24小时价格走势", "═══════════════════"]
+
+        price_data = result.get("price_data", [])
+        if not price_data:
+            lines.append("📊 暂无价格数据")
+        else:
+            lines.append("时间           | 价格")
+            lines.append("───────────────┼─────────")
+
+            # 显示所有数据（每10分钟一个点）
+            for data in price_data:
+                lines.append(f"{data['timestamp']} | {data['price']:>8}")
+
         yield event.plain_result("\n".join(lines))
     
     # ============== 结社系统 ==============
