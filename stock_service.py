@@ -83,15 +83,15 @@ class StockService:
 
                 # 根据市场情绪调整波动幅度（已削弱影响）
                 if sentiment == "恐慌":
-                    change = random.uniform(-0.03, -0.005)  # 原来是 -0.05 ~ -0.01
+                    change = random.uniform(-0.02, -0.001)  # 原来是 -0.05 ~ -0.01
                 elif sentiment == "悲观":
-                    change = random.uniform(-0.02, 0.005)   # 原来是 -0.03 ~ 0.01
+                    change = random.uniform(-0.01, 0.005)   # 原来是 -0.03 ~ 0.01
                 elif sentiment == "中立":
                     change = random.uniform(-0.015, 0.015)  # 原来是 -0.02 ~ 0.02
                 elif sentiment == "乐观":
-                    change = random.uniform(-0.005, 0.02)   # 原来是 -0.01 ~ 0.03
+                    change = random.uniform(-0.005, 0.01)   # 原来是 -0.01 ~ 0.03
                 elif sentiment == "贪婪":
-                    change = random.uniform(0.005, 0.03)    # 原来是 0.01 ~ 0.05
+                    change = random.uniform(0.001, 0.02)    # 原来是 0.01 ~ 0.05
 
                 new_price = current_price * (1 + change)
 

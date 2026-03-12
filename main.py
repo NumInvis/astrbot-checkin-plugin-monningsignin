@@ -2820,17 +2820,27 @@ class EconomyPlugin(Star):
         max_price = max(prices)
         price_range = max_price - min_price if max_price != min_price else 1
 
-        # 图表高度为10行
-        chart_height = 10
-        chart_width = min(len(price_data), 30)  # 最多显示30个数据点
+        # 图表设置
+        chart_height = 12
+        chart_width = min(len(price_data), 40)  # 最多显示40个数据点
 
         lines.append("")
         lines.append("价格/时间 →")
 
-        # 生成图表每一行
-        for row in range(chart_height, -1, -1):
-            price_level = min_price + (price_range * row / chart_height)
+        # 为每个数据点计算其在图表中的行位置
+        point_positions = []
+        for i in range(chart_width):
+            if i < len(price_data):
+                price = price_data[i]['price']
+                # 计算该价格对应的行号（0在最底部，chart_height在顶部）
+                row_pos = int((price - min_price) / price_range * chart_height) if price_range > 0 else chart_height // 2
+                row_pos = max(0, min(row_pos, chart_height))  # 确保在范围内
+                point_positions.append(row_pos)
+            else:
+                point_positions.append(-1)
 
+        # 生成图表每一行（从上到下）
+        for row in range(chart_height, -1, -1):
             # 价格标签
             if row == chart_height:
                 label = f"{max_price:>8.2f} ┤"
@@ -2839,31 +2849,36 @@ class EconomyPlugin(Star):
             else:
                 label = "         │"
 
-            # 绘制价格点
-            line = label
+            # 绘制这一行的内容
+            line_chars = []
             for i in range(chart_width):
-                if i < len(price_data):
-                    price = price_data[i]['price']
-                    # 计算该价格应该在哪个高度
-                    price_row = int((price - min_price) / price_range * chart_height) if price_range > 0 else chart_height // 2
-                    if price_row == row:
-                        line += "●"
-                    elif price_row > row:
-                        line += "│"
+                pos = point_positions[i]
+                if pos == -1:
+                    line_chars.append(" ")
+                elif pos == row:
+                    # 价格点在这个位置
+                    line_chars.append("●")
+                elif pos > row:
+                    # 价格点在上方，画连接线
+                    # 检查是否需要画连接线（与前一个或后一个点连接）
+                    prev_pos = point_positions[i-1] if i > 0 else -1
+                    next_pos = point_positions[i+1] if i < chart_width - 1 else -1
+                    if prev_pos >= row or next_pos >= row:
+                        line_chars.append("│")
                     else:
-                        line += " "
+                        line_chars.append(" ")
                 else:
-                    line += " "
+                    line_chars.append(" ")
 
-            lines.append(line)
+            lines.append(label + "".join(line_chars))
 
         # 底部横线
         lines.append("         └" + "─" * chart_width)
 
         # 时间标签（只显示首尾）
         if len(price_data) > 0:
-            first_time = price_data[0]['timestamp'].split()[1] if ' ' in price_data[0]['timestamp'] else price_data[0]['timestamp']
-            last_time = price_data[-1]['timestamp'].split()[1] if ' ' in price_data[-1]['timestamp'] else price_data[-1]['timestamp']
+            first_time = price_data[0]['timestamp'].split()[1] if ' ' in price_data[0]['timestamp'] else price_data[0]['timestamp'][-5:]
+            last_time = price_data[-1]['timestamp'].split()[1] if ' ' in price_data[-1]['timestamp'] else price_data[-1]['timestamp'][-5:]
             time_label = f"         {first_time:<{chart_width-5}}{last_time}"
             lines.append(time_label)
 
