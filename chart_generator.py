@@ -140,7 +140,9 @@ def generate_stock_chart(
     for i, data in enumerate(price_data):
         x = margin_left + (chart_width * i // (len(price_data) - 1)) if len(price_data) > 1 else margin_left + chart_width // 2
         y = margin_top + chart_height - ((data['price'] - min_price) / price_range * chart_height)
-        points.append((x, int(y), data['price'], data['timestamp']))
+        # 兼容 'timestamp' 和 'time' 两种键名
+        timestamp = data.get('timestamp') or data.get('time', '')
+        points.append((x, int(y), data['price'], timestamp))
     
     # 绘制价格走势线
     if len(points) > 1:
@@ -184,8 +186,11 @@ def generate_stock_chart(
     
     # 绘制X轴时间标签（只显示首尾）
     if len(price_data) > 0:
-        first_time = price_data[0]['timestamp'].split()[1] if ' ' in price_data[0]['timestamp'] else price_data[0]['timestamp'][-5:]
-        last_time = price_data[-1]['timestamp'].split()[1] if ' ' in price_data[-1]['timestamp'] else price_data[-1]['timestamp'][-5:]
+        # 兼容 'timestamp' 和 'time' 两种键名
+        first_ts = price_data[0].get('timestamp') or price_data[0].get('time', '')
+        last_ts = price_data[-1].get('timestamp') or price_data[-1].get('time', '')
+        first_time = first_ts.split()[1] if ' ' in first_ts else first_ts[-5:] if len(first_ts) >= 5 else first_ts
+        last_time = last_ts.split()[1] if ' ' in last_ts else last_ts[-5:] if len(last_ts) >= 5 else last_ts
         
         draw.text((margin_left, height - 40), first_time, fill=(150, 150, 150), font=label_font)
         draw.text((width - margin_right - 50, height - 40), last_time, fill=(150, 150, 150), font=label_font)
