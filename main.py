@@ -41,6 +41,7 @@ from charity_service import CharityService
 from favor_system import FavorSystem
 from db_manager import DatabaseManager
 from announcement_service import AnnouncementService
+from chart_generator import generate_stock_chart
 from utils import today_str, now_str, mask_id, format_num
 
 # ============== 数据库管理器 ==============
@@ -2790,7 +2791,7 @@ class EconomyPlugin(Star):
     
     @filter.command("k线")
     async def cmd_stock_kline(self, event: AstrMessageEvent):
-        """查看股票价格走势（带图表）"""
+        """查看股票价格走势（生成图片）"""
         await self._ensure_db()
 
         user_id = str(event.get_sender_id())
@@ -2808,84 +2809,28 @@ class EconomyPlugin(Star):
             return
 
         price_data = result.get("price_data", [])
-        if not price_data:
-            yield event.plain_result(f"📈 {result['stock_name']} 最近24小时价格走势\n═══════════════════\n📊 暂无价格数据")
-            return
 
-        lines = [f"📈 {result['stock_name']} 最近24小时价格走势", "═══════════════════"]
-
-        # 生成文本图表
-        prices = [d['price'] for d in price_data]
-        min_price = min(prices)
-        max_price = max(prices)
-        price_range = max_price - min_price if max_price != min_price else 1
-
-        # 图表设置
-        chart_height = 12
-        chart_width = min(len(price_data), 40)  # 最多显示40个数据点
-
-        lines.append("")
-        lines.append("价格/时间 →")
-
-        # 为每个数据点计算其在图表中的行位置
-        point_positions = []
-        for i in range(chart_width):
-            if i < len(price_data):
-                price = price_data[i]['price']
-                # 计算该价格对应的行号（0在最底部，chart_height在顶部）
-                row_pos = int((price - min_price) / price_range * chart_height) if price_range > 0 else chart_height // 2
-                row_pos = max(0, min(row_pos, chart_height))  # 确保在范围内
-                point_positions.append(row_pos)
-            else:
-                point_positions.append(-1)
-
-        # 生成图表每一行（从上到下）
-        for row in range(chart_height, -1, -1):
-            # 价格标签
-            if row == chart_height:
-                label = f"{max_price:>8.2f} ┤"
-            elif row == 0:
-                label = f"{min_price:>8.2f} ┤"
-            else:
-                label = "         │"
-
-            # 绘制这一行的内容
-            line_chars = []
-            for i in range(chart_width):
-                pos = point_positions[i]
-                if pos == -1:
-                    line_chars.append(" ")
-                elif pos == row:
-                    # 价格点在这个位置
-                    line_chars.append("●")
-                elif pos > row:
-                    # 价格点在上方，画连接线
-                    # 检查是否需要画连接线（与前一个或后一个点连接）
-                    prev_pos = point_positions[i-1] if i > 0 else -1
-                    next_pos = point_positions[i+1] if i < chart_width - 1 else -1
-                    if prev_pos >= row or next_pos >= row:
-                        line_chars.append("│")
-                    else:
-                        line_chars.append(" ")
-                else:
-                    line_chars.append(" ")
-
-            lines.append(label + "".join(line_chars))
-
-        # 底部横线
-        lines.append("         └" + "─" * chart_width)
-
-        # 时间标签（只显示首尾）
-        if len(price_data) > 0:
-            first_time = price_data[0]['timestamp'].split()[1] if ' ' in price_data[0]['timestamp'] else price_data[0]['timestamp'][-5:]
-            last_time = price_data[-1]['timestamp'].split()[1] if ' ' in price_data[-1]['timestamp'] else price_data[-1]['timestamp'][-5:]
-            time_label = f"         {first_time:<{chart_width-5}}{last_time}"
-            lines.append(time_label)
-
-        lines.append("")
-        lines.append(f"📊 数据点: {len(price_data)}个 | 最高: {max_price:.2f} | 最低: {min_price:.2f}")
-
-        yield event.plain_result("\n".join(lines))
+        # 生成图片
+        try:
+            image_bytes = generate_stock_chart(result['stock_name'], price_data)
+            # 使用 AstrBot 的 Image 组件发送图片
+            from astrbot.api.message_components import Image, Plain
+            yield event.chain_result([Plain(f"📈 {result['stock_name']} 最近24小时价格走势"), Image.fromBytes(image_bytes)])
+        except Exception as e:
+            logger.error(f"生成股票图表失败: {e}")
+            # 如果图片生成失败，回退到文本显示
+            if not price_data:
+                yield event.plain_result(f"📈 {result['stock_name']}\n暂无价格数据")
+                return
+            prices = [d['price'] for d in price_data]
+            yield event.plain_result(
+                f"📈 {result['stock_name']} 最近24小时价格走势\n"
+                f"═══════════════════\n"
+                f"📊 数据点: {len(price_data)}个\n"
+                f"💰 当前: {prices[-1]:.2f}\n"
+                f"📈 最高: {max(prices):.2f}\n"
+                f"📉 最低: {min(prices):.2f}"
+            )
     
     # ============== 结社系统 ==============
     @filter.command("结社")
