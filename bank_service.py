@@ -33,6 +33,53 @@ class BankService:
             )
             row = await cursor.fetchone()
             return row is not None and row[0] > 0
+
+    async def _get_rate(self, db, user_id: str) -> float:
+        """获取用户银行存款利率（内部方法）"""
+        has_vip = await self.has_vip_card(user_id)
+        base_rate = CONFIG.BANK_VIP_RATE if has_vip else CONFIG.BANK_NORMAL_RATE
+
+        # 应用紫色成就加成
+        cursor = await db.execute(
+            "SELECT SUM(bonus_value) FROM achievement_bonuses WHERE user_id = ? AND bonus_type = 'bank_rate_bonus'",
+            (user_id,)
+        )
+        bonus_result = await cursor.fetchone()
+        rate_bonus = bonus_result[0] if bonus_result and bonus_result[0] else 0
+
+        return base_rate + rate_bonus
+
+    async def _calc_interest(self, db, user_id: str, bank: int, rate: float) -> tuple[int, float]:
+        """计算银行利息（内部方法）"""
+        if bank <= 0:
+            return bank, rate
+
+        cursor = await db.execute(
+            "SELECT bank_last_date FROM users WHERE user_id = ?",
+            (user_id,)
+        )
+        row = await cursor.fetchone()
+        last_date = row[0] if row and row[0] else today_str()
+
+        if last_date == today_str():
+            return bank, rate
+
+        # 计算复利
+        try:
+            d1 = datetime.strptime(last_date, "%Y-%m-%d")
+            d2 = datetime.strptime(today_str(), "%Y-%m-%d")
+            days = (d2 - d1).days
+            if days > 0:
+                new_balance = int(bank * ((1 + rate) ** days))
+                await db.execute(
+                    "UPDATE users SET bank_balance = ?, bank_last_date = ? WHERE user_id = ?",
+                    (new_balance, today_str(), user_id)
+                )
+                return new_balance, rate
+        except Exception as e:
+            logger.warning(f"日期解析失败: {e}")
+
+        return bank, rate
     
     async def update_bank_interest(self, user_id: str) -> tuple[int, float]:
         """更新银行利息"""
@@ -172,53 +219,64 @@ class BankService:
     
     async def withdraw(self, user_id: str, amount: int) -> dict:
         """取款"""
-        # 更新利息
-        bank, _ = await self.update_bank_interest(user_id)
-        
-        # 检查余额
+        # 使用事务原子操作
         async with aiosqlite.connect(self.db_path) as db:
-            cursor = await db.execute(
-                "SELECT balance FROM users WHERE user_id = ?",
-                (user_id,)
-            )
-            row = await cursor.fetchone()
-            if not row:
-                return {"success": False, "message": "用户不存在"}
-            
+            await db.execute("BEGIN IMMEDIATE")
             try:
-                balance = int(row[0]) if row[0] else 0
-            except (ValueError, TypeError):
-                balance = 0
-            
-            if bank < amount:
-                return {"success": False, "message": f"存款不足！当前：{format_num(bank)}星声"}
-        
-        # 计算手续费
-        has_vip = await self.has_vip_card(user_id)
-        
-        if has_vip:
-            fee = 0
-        else:
-            fee = max(1, int(amount * CONFIG.BANK_WITHDRAW_FEE))
-        
-        actual = amount - fee
-        new_bank = bank - amount
-        new_cash = balance + actual
-        
-        # 更新余额
-        async with aiosqlite.connect(self.db_path) as db:
-            await db.execute(
-                "UPDATE users SET balance = ?, bank_balance = ? WHERE user_id = ?",
-                (new_cash, new_bank, user_id)
-            )
-            await db.commit()
-        
-        return {
-            "success": True,
-            "amount": amount,
-            "fee": fee,
-            "actual": actual,
-            "new_bank": new_bank,
-            "new_cash": new_cash,
-            "has_vip": has_vip
-        }
+                # 更新利息并获取当前余额
+                rate = await self._get_rate(db, user_id)
+                cursor = await db.execute(
+                    "SELECT balance, bank_balance FROM users WHERE user_id = ?",
+                    (user_id,)
+                )
+                row = await cursor.fetchone()
+                if not row:
+                    await db.execute("ROLLBACK")
+                    return {"success": False, "message": "用户不存在"}
+
+                try:
+                    balance = int(row[0]) if row[0] else 0
+                    bank = int(row[1]) if row[1] else 0
+                except (ValueError, TypeError):
+                    balance = 0
+                    bank = 0
+
+                # 计算利息
+                bank, _ = await self._calc_interest(db, user_id, bank, rate)
+
+                # 检查存款余额
+                if bank < amount:
+                    await db.execute("ROLLBACK")
+                    return {"success": False, "message": f"存款不足！当前：{format_num(bank)}星声"}
+
+                # 计算手续费
+                has_vip = await self.has_vip_card(user_id)
+                if has_vip:
+                    fee = 0
+                else:
+                    fee = max(1, int(amount * CONFIG.BANK_WITHDRAW_FEE))
+
+                actual = amount - fee
+                new_bank = bank - amount
+                new_cash = balance + actual
+
+                # 更新余额
+                await db.execute(
+                    "UPDATE users SET balance = ?, bank_balance = ? WHERE user_id = ?",
+                    (new_cash, new_bank, user_id)
+                )
+                await db.execute("COMMIT")
+
+                return {
+                    "success": True,
+                    "amount": amount,
+                    "fee": fee,
+                    "actual": actual,
+                    "new_bank": new_bank,
+                    "new_cash": new_cash,
+                    "has_vip": has_vip
+                }
+            except Exception as e:
+                await db.execute("ROLLBACK")
+                logger.error(f"取款失败: {e}")
+                return {"success": False, "message": "取款失败，请稍后重试"}

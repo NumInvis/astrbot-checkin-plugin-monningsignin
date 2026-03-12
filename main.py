@@ -502,7 +502,7 @@ class EconomyPlugin(Star):
                 if name and name != str(event.get_sender_id()):
                     return name
         except Exception as e:
-            pass  # TODO: 处理异常
+            logger.debug(f"获取昵称失败: {e}")
         
         try:
             if hasattr(event, 'message_obj') and event.message_obj:
@@ -515,7 +515,7 @@ class EconomyPlugin(Star):
                     if card:
                         return card
         except Exception as e:
-            pass  # TODO: 处理异常
+            logger.debug(f"获取昵称失败: {e}")
         
         return mask_id(str(event.get_sender_id()))
     
@@ -1113,8 +1113,8 @@ class EconomyPlugin(Star):
             amount = int(parts[-1])
             if amount <= 0:
                 raise ValueError()
-        except Exception as e:
-            pass  # 修复：原变量y未定义：添加具体异常类型ield event.plain_result("? 金额必须是正整数！")
+        except (ValueError, IndexError):
+            yield event.plain_result("❌ 金额必须是正整数！\n💡 用法：/转账 @用户 金额")
             return
         
         target_id = self._parse_target(event)
@@ -1284,7 +1284,7 @@ class EconomyPlugin(Star):
             try:
                 await db.execute("ALTER TABLE economy_history ADD COLUMN season INTEGER DEFAULT 1")
             except Exception as e:
-                pass  # TODO: 处理异常
+                logger.debug(f"获取昵称失败: {e}")
             
             await db.execute(
                 """INSERT OR REPLACE INTO economy_history 
@@ -1988,10 +1988,10 @@ class EconomyPlugin(Star):
             amount = int(parts[-1])
             if amount <= 0:
                 raise ValueError()
-        except Exception as e:
-            pass  # 修复：原变量y未定义：添加具体异常类型ield event.plain_result("? 用法：/存款 100")
+        except (ValueError, IndexError):
+            yield event.plain_result("❌ 金额必须是正整数！\n💡 用法：/存款 金额")
             return
-        
+
         result = await self.bank_service.deposit(user_id, amount)
         if not result["success"]:
             yield event.plain_result(result["message"])
@@ -2018,10 +2018,10 @@ class EconomyPlugin(Star):
             amount = int(parts[-1])
             if amount <= 0:
                 raise ValueError()
-        except Exception as e:
-            pass  # 修复：原变量y未定义：添加具体异常类型ield event.plain_result("? 用法：/取款 100")
+        except (ValueError, IndexError):
+            yield event.plain_result("❌ 金额必须是正整数！\n💡 用法：/取款 金额")
             return
-        
+
         result = await self.bank_service.withdraw(user_id, amount)
         if not result["success"]:
             yield event.plain_result(result["message"])
