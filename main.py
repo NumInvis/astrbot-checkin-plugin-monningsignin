@@ -962,55 +962,27 @@ class EconomyPlugin(Star):
                 
                 desc = " ".join(args[7:])
                 
-                # 更新配置文件
-                config_content = ""
-                with open("config.py", "r", encoding="utf-8") as f:
-                    config_content = f.read()
+                # 使用数据库替代修改源码
+                await self.config_manager.set(f"shop_item_{item_name}", {
+                    "price": price,
+                    "daily_limit": daily_limit,
+                    "favor_value": favor_value,
+                    "desc": desc
+                })
                 
-                # 添加新商品到SHOP_ITEMS
-                import re
-                shop_items_match = re.search(r"SHOP_ITEMS = \{([\s\S]*?)\}", config_content)
-                if shop_items_match:
-                    shop_items_content = shop_items_match.group(1)
-                    new_item = f'        "{item_name}": {{"price": {price}, "daily_limit": {daily_limit}, "desc": "增加莫宁宁{favor_value}点好感值"}}'
-                    
-                    if shop_items_content.strip():
-                        new_shop_items = shop_items_content.strip() + ",\n" + new_item
-                    else:
-                        new_shop_items = new_item
-                    
-                    new_config = config_content.replace(shop_items_match.group(1), new_shop_items)
-                    
-                    with open("config.py", "w", encoding="utf-8") as f:
-                        f.write(new_config)
-                    
-                    # 更新favor_items字典（需要重启插件生效）
-                    yield event.plain_result(f"? 商品上架成功！\n商品：{item_name}\n价格：{price}星声\n每日限购：{daily_limit}个\n好感值：{favor_value}点\n描述：{desc}")
-                else:
-                    yield event.plain_result("? 配置文件格式错误，无法添加商品")
+                yield event.plain_result(f"? 商品上架成功！\n商品：{item_name}\n价格：{price}星声\n每日限购：{daily_limit}个\n好感值：{favor_value}点\n描述：{desc}")
             
             # 下架商品
             elif shop_cmd == "remove":
                 if len(args) < 4:
                     yield event.plain_result("? 用法：/admin shop remove <商品名>")
                     return
-                
+
                 item_name = args[3]
-                
-                # 更新配置文件
-                config_content = ""
-                with open("config.py", "r", encoding="utf-8") as f:
-                    config_content = f.read()
-                
-                # 从SHOP_ITEMS中移除商品
-                import re
-                pattern = r'\s*"' + re.escape(item_name) + r'":\s*\{[^\}]*\},?\s*'
-                new_config = re.sub(pattern, '', config_content)
-                
-                with open("config.py", "w", encoding="utf-8") as f:
-                    f.write(new_config)
-                
-                # 更新favor_items字典（需要重启插件生效）
+
+                # 从数据库删除商品
+                await self.config_manager.set(f"shop_item_{item_name}", None)
+
                 yield event.plain_result(f"? 商品下架成功！\n商品：{item_name}")
             
             # 修改商品属性
@@ -1034,24 +1006,17 @@ class EconomyPlugin(Star):
                     if attribute in ["price", "daily_limit"]:
                         int(value)
                 except Exception as e:
-                    y  # 修复：添加具体异常类型ield event.plain_result("? 值必须是整数！")
+                    yield event.plain_result("? 值必须是整数！")
                     return
-                
-                # 更新配置文件
-                config_content = ""
-                with open("config.py", "r", encoding="utf-8") as f:
-                    config_content = f.read()
-                
-                # 修改商品属性
-                import re
-                pattern = r'("' + re.escape(item_name) + r'":\s*\{[^\}]*"' + attribute + r'")\s*:\s*[^,}]+'
-                replacement = r'\1: ' + value
-                new_config = re.sub(pattern, replacement, config_content)
-                
-                with open("config.py", "w", encoding="utf-8") as f:
-                    f.write(new_config)
-                
-                yield event.plain_result(f"? 商品属性修改成功！\n商品：{item_name}\n属性：{attribute}\n新值：{value}")
+
+                # 从数据库获取商品并修改属性
+                item_data = await self.config_manager.get(f"shop_item_{item_name}")
+                if item_data:
+                    item_data[attribute] = int(value)
+                    await self.config_manager.set(f"shop_item_{item_name}", item_data)
+                    yield event.plain_result(f"? 商品属性修改成功！\n商品：{item_name}\n属性：{attribute}\n新值：{value}")
+                else:
+                    yield event.plain_result(f"? 商品不存在：{item_name}")
             
             else:
                 yield event.plain_result("? 无效的商店命令！可用命令：add, remove, edit")
