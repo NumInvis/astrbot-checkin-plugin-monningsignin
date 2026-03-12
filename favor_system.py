@@ -243,8 +243,8 @@ class FavorSystem:
                             'message': f'关系描述更新CD中，还需等待{remaining_minutes}分钟',
                             'next_update_time': row[1]
                         }
-                except:
-                    pass
+                except Exception as e:
+                    logger.warning(f"操作失败: {e}")
             
             # 计算下次可更新时间（1小时后）
             next_update_time = (now + timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")

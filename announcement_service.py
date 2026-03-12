@@ -111,5 +111,6 @@ class AnnouncementService:
                 )
                 await db.commit()
                 return True
-        except:
+        except Exception as e:
+            logger.error(f"删除公告失败: {e}")
             return False

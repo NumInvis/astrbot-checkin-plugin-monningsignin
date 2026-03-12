@@ -85,8 +85,8 @@ class BankService:
                     )
                     await db.commit()
                     return new_balance, rate
-            except:
-                pass
+            except Exception as e:
+                logger.warning(f"日期解析失败: {e}")
             
             return balance, rate
     

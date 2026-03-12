@@ -1,7 +1,30 @@
 """图表生成模块 - 使用PIL生成股票走势图"""
 import io
 from PIL import Image, ImageDraw, ImageFont
+import os
 from typing import List, Dict, Optional
+
+
+
+# 字体路径配置 - 优先使用插件目录下的字体
+import os
+PLUGIN_DIR = os.path.dirname(os.path.abspath(__file__))
+FONT_PATHS = [
+    os.path.join(PLUGIN_DIR, "fonts", "NotoSansCJK-Bold.ttc"),
+    os.path.join(PLUGIN_DIR, "fonts", "NotoSansCJK-Regular.ttc"),
+    "/usr/share/fonts/truetype/NotoSansCJK-Bold.ttc",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+]
+
+def get_font(font_size=12):
+    """获取字体，优先使用插件自带字体"""
+    for font_path in FONT_PATHS:
+        if os.path.exists(font_path):
+            try:
+                return ImageFont.truetype(font_path, font_size)
+            except:
+                continue
+    return ImageFont.load_default()
 
 
 def generate_stock_chart(
