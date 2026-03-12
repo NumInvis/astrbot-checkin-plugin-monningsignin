@@ -44,273 +44,6 @@ from announcement_service import AnnouncementService
 from chart_generator import generate_stock_chart
 from utils import today_str, now_str, mask_id, format_num
 
-# ============== 数据库管理器 ==============
-class DBManager:
-    """数据库管理器"""
-    
-    def __init__(self, db_path: str):
-        self.db_path = db_path
-        self._ready = False
-    
-    async def init(self):
-        if self._ready:
-            return
-        
-        os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
-        
-        async with aiosqlite.connect(self.db_path) as db:
-            # 用户表 - 使用CREATE TABLE IF NOT EXISTS确保表存在但不删除
-            await db.execute("""
-                CREATE TABLE IF NOT EXISTS users (
-                    user_id TEXT PRIMARY KEY,
-                    balance INTEGER DEFAULT 0,
-                    bank_balance INTEGER DEFAULT 0,
-                    last_signin_date TEXT,
-                    consecutive_days INTEGER DEFAULT 0,
-                    bank_last_date TEXT,
-                    favor_value INTEGER DEFAULT 0
-                )
-            """)
-            
-            # 添加 favor_value 列（如果不存在）- 兼容性迁移
-            try:
-                await db.execute("ALTER TABLE users ADD COLUMN favor_value INTEGER DEFAULT 0")
-            except aiosqlite.OperationalError:
-                pass  # 列已存在
-            
-            # 添加 bank_last_date 列（如果不存在）- 兼容性迁移
-            try:
-                await db.execute("ALTER TABLE users ADD COLUMN bank_last_date TEXT")
-            except aiosqlite.OperationalError:
-                pass  # 列已存在
-            
-            # 用户信息表
-            await db.execute("""
-                CREATE TABLE IF NOT EXISTS user_info (
-                    user_id TEXT PRIMARY KEY,
-                    nickname TEXT,
-                    last_update TEXT
-                )
-            """)
-            
-            # 税收池表
-            await db.execute("""
-                CREATE TABLE IF NOT EXISTS tax_pool (
-                    date TEXT PRIMARY KEY,
-                    total_tax INTEGER DEFAULT 0,
-                    bonus_pool INTEGER DEFAULT 0,
-                    claimed INTEGER DEFAULT 0,
-                    top10_list TEXT,
-                    wealth_gap_ratio REAL DEFAULT 0,
-                    extra_tax_rate REAL DEFAULT 0
-                )
-            """)
-            
-            # 经济历史表
-            await db.execute("""
-                CREATE TABLE IF NOT EXISTS economy_history (
-                    date TEXT PRIMARY KEY,
-                    total_assets INTEGER DEFAULT 0,
-                    user_count INTEGER DEFAULT 0,
-                    avg_assets INTEGER DEFAULT 0,
-                    wealth_gap_ratio REAL DEFAULT 0,
-                    gini_coefficient REAL DEFAULT 0
-                )
-            """)
-            
-            # 库存表
-            await db.execute("""
-                CREATE TABLE IF NOT EXISTS inventory (
-                    user_id TEXT,
-                    item_name TEXT,
-                    quantity INTEGER DEFAULT 0,
-                    PRIMARY KEY (user_id, item_name)
-                )
-            """)
-            
-            # 购买日志
-            await db.execute("""
-                CREATE TABLE IF NOT EXISTS purchase_log (
-                    user_id TEXT,
-                    item_name TEXT,
-                    purchase_date TEXT,
-                    count INTEGER DEFAULT 0,
-                    PRIMARY KEY (user_id, item_name, purchase_date)
-                )
-            """)
-            
-            # 占卜日志
-            await db.execute("""
-                CREATE TABLE IF NOT EXISTS lottery_log (
-                    user_id TEXT,
-                    date TEXT,
-                    count INTEGER DEFAULT 0,
-                    PRIMARY KEY (user_id, date)
-                )
-            """)
-            
-            # 签到记录表
-            await db.execute("""
-                CREATE TABLE IF NOT EXISTS user_sign (
-                    user_id TEXT PRIMARY KEY,
-                    last_sign_date TEXT,
-                    continuous_days INTEGER DEFAULT 0,
-                    total_days INTEGER DEFAULT 0
-                )
-            """)
-            
-            # 塔罗牌记录
-            await db.execute("""
-                CREATE TABLE IF NOT EXISTS user_daily_tarot (
-                    user_id TEXT,
-                    date TEXT,
-                    tarot_card TEXT,
-                    draw_time TEXT,
-                    PRIMARY KEY (user_id, date)
-                )
-            """)
-            
-            # 额外占卜次数表
-            await db.execute("""
-                CREATE TABLE IF NOT EXISTS user_lottery_extra (
-                    user_id TEXT,
-                    date TEXT,
-                    extra_count INTEGER DEFAULT 0,
-                    PRIMARY KEY (user_id, date)
-                )
-            """)
-            
-            # 工作表
-            await db.execute("""
-                CREATE TABLE IF NOT EXISTS user_work (
-                    user_id TEXT PRIMARY KEY,
-                    work_name TEXT,
-                    start_time TEXT,
-                    last_claim_time TEXT,
-                    total_earned INTEGER DEFAULT 0
-                )
-            """)
-            
-            # 结社表
-            await db.execute("""
-                CREATE TABLE IF NOT EXISTS user_society (
-                    user_id TEXT PRIMARY KEY,
-                    society_name TEXT,
-                    join_time TEXT,
-                    last_change_time TEXT
-                )
-            """)
-            
-            # 股票表
-            await db.execute("""
-                CREATE TABLE IF NOT EXISTS stock_prices (
-                    stock_name TEXT PRIMARY KEY,
-                    current_price REAL DEFAULT 0,
-                    base_price REAL DEFAULT 0,
-                    owner_id TEXT,
-                    delisted INTEGER DEFAULT 0,
-                    emoji TEXT,
-                    desc TEXT,
-                    last_update TEXT
-                )
-            """)
-            
-            await db.execute("""
-                CREATE TABLE IF NOT EXISTS stock_holdings (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id TEXT,
-                    stock_name TEXT,
-                    quantity REAL DEFAULT 0,
-                    buy_price REAL DEFAULT 0,
-                    buy_time TEXT,
-                    remaining REAL DEFAULT 0,
-                    last_dividend_date TEXT
-                )
-            """)
-
-            # 股票价格历史表
-            await db.execute("""
-                CREATE TABLE IF NOT EXISTS stock_price_history (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    stock_name TEXT,
-                    price REAL,
-                    timestamp TEXT,
-                    FOREIGN KEY (stock_name) REFERENCES stock_prices(stock_name)
-                )
-            """)
-            
-            # 成就表 - 使用CREATE TABLE IF NOT EXISTS确保表存在但不删除
-            await db.execute("""
-                CREATE TABLE IF NOT EXISTS user_achievements (
-                    user_id TEXT,
-                    achievement_id TEXT,
-                    obtain_time TEXT,
-                    PRIMARY KEY (user_id, achievement_id)
-                )
-            """)
-            
-            # 初始化默认股票
-            default_stocks = [
-                ("菲比教会", 10, "🕊️", "菲比啾比，菲比啾比！"),
-                ("莫宁时代", 50, "🎁", "我将，诘问群星！"),
-                ("今州科技", 200, "🎁", "今州地大物博"),
-                ("深空联合", 1000, "🎁", "我们是薪火的传承者")
-            ]
-            
-            for name, price, emoji, desc in default_stocks:
-                await db.execute(
-                    """INSERT OR IGNORE INTO stock_prices 
-                        (stock_name, current_price, base_price, emoji, desc, last_update)
-                        VALUES (?, ?, ?, ?, ?, ?)""",
-                    (name, price, price, emoji, desc, today_str())
-                )
-            
-            # 创建成就加成表
-            await db.execute("""
-                CREATE TABLE IF NOT EXISTS achievement_bonuses (
-                    user_id TEXT,
-                    achievement_id TEXT,
-                    bonus_type TEXT,
-                    bonus_value REAL,
-                    PRIMARY KEY (user_id, achievement_id, bonus_type)
-                )
-            """)
-            
-            # 创建用户关系描述表（存储AI生成的关系描述）
-            await db.execute("""
-                CREATE TABLE IF NOT EXISTS user_relationship (
-                    user_id TEXT PRIMARY KEY,
-                    relationship_desc TEXT,
-                    update_time TEXT,
-                    next_update_time TEXT
-                )
-            """)
-            
-            # 检查并添加 next_update_time 列（兼容性迁移）
-            try:
-                await db.execute("SELECT next_update_time FROM user_relationship LIMIT 1")
-            except aiosqlite.OperationalError:
-                # 列不存在，添加它
-                await db.execute("ALTER TABLE user_relationship ADD COLUMN next_update_time TEXT")
-                logger.info("[数据库迁移] 已添加 next_update_time 列到 user_relationship 表")
-            
-            # 创建常用索引
-            await db.execute("CREATE INDEX IF NOT EXISTS idx_inventory_user ON inventory(user_id)")
-            await db.execute("CREATE INDEX IF NOT EXISTS idx_lottery_user_date ON lottery_log(user_id, date)")
-            await db.execute("CREATE INDEX IF NOT EXISTS idx_stock_holdings_user ON stock_holdings(user_id, stock_name)")
-            await db.execute("CREATE INDEX IF NOT EXISTS idx_achievements_user ON user_achievements(user_id)")
-            await db.execute("CREATE INDEX IF NOT EXISTS idx_purchase_user ON purchase_log(user_id)")
-            
-            # v1.0.1.1 新增索引
-            await db.execute("CREATE INDEX IF NOT EXISTS idx_stock_holdings_stock ON stock_holdings(stock_name)")
-            await db.execute("CREATE INDEX IF NOT EXISTS idx_user_society_name ON user_society(society_name)")
-            await db.execute("CREATE INDEX IF NOT EXISTS idx_stock_price_history ON stock_price_history(stock_name, timestamp)")
-            await db.execute("CREATE INDEX IF NOT EXISTS idx_tax_pool_date ON tax_pool(date)")
-            
-            await db.commit()
-        
-        self._ready = True
-
 # ============== 主插件类 ==============
 @register("astrbot_plugin_signin", "NumInvis", "莫宁宁的币", "2.0.0")
 class EconomyPlugin(Star):
@@ -321,7 +54,9 @@ class EconomyPlugin(Star):
         # 使用 StarTools.get_data_dir() 获取规范的数据存储目录
         data_dir = StarTools.get_data_dir()
         self.db_path = str(data_dir / "signin.db")
-        self.db = DBManager(self.db_path)
+        
+        # 初始化数据库管理器（统一使用DatabaseManager，删除DBManager）
+        self.db_manager = DatabaseManager(self.db_path)
         
         # 初始化服务
         self.admin_service = AdminService(self.db_path)
@@ -335,9 +70,8 @@ class EconomyPlugin(Star):
         self.achievement_service = AchievementService(self.db_path)
         self.charity_service = CharityService(self.db_path)
         
-        # 初始化好感度系统和数据库管理器
+        # 初始化好感度系统
         self.favor_system = FavorSystem(self.db_path)
-        self.db_manager = DatabaseManager(self.db_path)
         
         # 初始化公告服务
         self.announcement_service = AnnouncementService(self.db_path)
@@ -347,17 +81,31 @@ class EconomyPlugin(Star):
         self.config_manager = ConfigManager(self.db_path)
         
         self._initialized = False
-        logger.info("【经济系统】插件加载中 v2.0.0")
+        self._init_lock = asyncio.Lock()  # 添加异步锁防止并发初始化
+        
+        logger.info("【经济系统】插件加载中 v2.0.1")
     
     async def _ensure_db(self):
-        """确保数据库初始化"""
-        if not self._initialized:
-            await self.db.init()
+        """确保数据库初始化（带异步锁防止并发）"""
+        if self._initialized:
+            return
+        
+        async with self._init_lock:
+            # 双重检查，防止多个协程同时通过第一次检查
+            if self._initialized:
+                return
+            
+            # 初始化数据库
+            await self.db_manager.init_database()
+            
             # 授予赛季成就
             await self.achievement_service.grant_season_achievements()
+            
             # 初始化公告表
             await self.announcement_service.init_table()
+            
             self._initialized = True
+            logger.info("【经济系统】数据库初始化完成")
     
     # ============== 用户基础功能 ==============
     async def _get_user(self, user_id: str) -> Dict:
