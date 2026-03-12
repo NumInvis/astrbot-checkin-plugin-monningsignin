@@ -136,6 +136,12 @@ git clone https://github.com/MTMASTER-star/astrbot-checkin-plugin-monningsignin.
 - [AstrBot](https://github.com/Soulter/AstrBot) - 优秀的QQ机器人框架
 - 所有贡献者和用户
 
+## 💖 赞助支持
+
+如果这个插件对你有帮助，欢迎赞助支持！
+
+- 爱发电: [https://afdian.com/a/r0xy0](https://afdian.com/a/r0xy0)
+
 ## 📞 联系方式
 
 - GitHub: [@NumInvis](https://github.com/NumInvis)
