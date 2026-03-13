@@ -47,7 +47,29 @@ class BankService:
         bonus_result = await cursor.fetchone()
         rate_bonus = bonus_result[0] if bonus_result and bonus_result[0] else 0
 
-        return base_rate + rate_bonus
+        # 负资产结社福利
+        fu_bonus = 0.0
+        cursor = await db.execute(
+            "SELECT society_name FROM user_society WHERE user_id = ?",
+            (user_id,)
+        )
+        society_row = await cursor.fetchone()
+        if society_row and society_row[0] == "负资产结社":
+            # 计算负资产结社福利：银行利率增加25-x%，x为负资产结社人数占比
+            cursor = await db.execute("SELECT COUNT(*) FROM user_society")
+            total_members = await cursor.fetchone()
+            total_members = total_members[0] if total_members else 1
+            
+            cursor = await db.execute(
+                "SELECT COUNT(*) FROM user_society WHERE society_name = '负资产结社'"
+            )
+            member_count = await cursor.fetchone()
+            member_count = member_count[0] if member_count else 0
+            
+            ratio = (member_count / total_members) * 100
+            fu_bonus = max(0, 25 - ratio) / 100.0  # 转换为小数
+
+        return base_rate + rate_bonus + fu_bonus
 
     async def _calc_interest(self, db, user_id: str, bank: int, rate: float) -> tuple[int, float]:
         """计算银行利息（内部方法）"""
@@ -86,16 +108,37 @@ class BankService:
         has_vip = await self.has_vip_card(user_id)
         base_rate = CONFIG.BANK_VIP_RATE if has_vip else CONFIG.BANK_NORMAL_RATE
         
-        # 应用紫色成就加成：银行存款利率永久性提升
         async with aiosqlite.connect(self.db_path) as db:
+            # 应用紫色成就加成：银行存款利率永久性提升
             cursor = await db.execute(
                 "SELECT SUM(bonus_value) FROM achievement_bonuses WHERE user_id = ? AND bonus_type = 'bank_rate_bonus'",
                 (user_id,)
             )
             bonus_result = await cursor.fetchone()
             rate_bonus = bonus_result[0] if bonus_result and bonus_result[0] else 0
+            
+            # 负资产结社福利
+            fu_bonus = 0.0
+            cursor = await db.execute(
+                "SELECT society_name FROM user_society WHERE user_id = ?",
+                (user_id,)
+            )
+            society_row = await cursor.fetchone()
+            if society_row and society_row[0] == "负资产结社":
+                cursor = await db.execute("SELECT COUNT(*) FROM user_society")
+                total_members = await cursor.fetchone()
+                total_members = total_members[0] if total_members else 1
+                
+                cursor = await db.execute(
+                    "SELECT COUNT(*) FROM user_society WHERE society_name = '负资产结社'"
+                )
+                member_count = await cursor.fetchone()
+                member_count = member_count[0] if member_count else 0
+                
+                ratio = (member_count / total_members) * 100
+                fu_bonus = max(0, 25 - ratio) / 100.0
         
-        rate = base_rate + rate_bonus
+        rate = base_rate + rate_bonus + fu_bonus
         
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute(

@@ -86,9 +86,28 @@ class SigninService:
             if favor_result and favor_result[0]:
                 signin_favor_bonus = int(favor_result[0])
             
+            # 拜月结社福利
+            yue_bonus_fixed = 0
+            yue_bonus_percent = 0.0
+            cursor = await db.execute(
+                "SELECT society_name FROM user_society WHERE user_id = ?",
+                (user_id,)
+            )
+            society_row = await cursor.fetchone()
+            if society_row and society_row[0] == "拜月结社":
+                cursor = await db.execute(
+                    "SELECT COUNT(*) FROM user_society WHERE society_name = '拜月结社'"
+                )
+                yue_count = await cursor.fetchone()
+                yue_count = yue_count[0] if yue_count else 0
+                yue_bonus_fixed = yue_count
+                yue_bonus_percent = yue_count / 100.0
+            
             # 低保加成（根据排名）
             low_income_rate = max(0.1, percentile)  # 最低10%加成
-            total = base + bonus + signin_extra
+            total_before_yue = base + bonus + signin_extra
+            yue_bonus = int(total_before_yue * yue_bonus_percent)
+            total = total_before_yue + yue_bonus_fixed + yue_bonus
             
             # 更新用户数据（余额）
             new_balance = user["balance"] + total
@@ -112,6 +131,8 @@ class SigninService:
                 "bonus": bonus,
                 "signin_extra": signin_extra,  # 蓝色成就加成
                 "signin_favor_bonus": signin_favor_bonus,  # 彩色成就加成
+                "yue_bonus_fixed": yue_bonus_fixed,  # 拜月结社固定加成
+                "yue_bonus": yue_bonus,  # 拜月结社百分比加成
                 "total": total,
                 "balance": new_balance,
                 "consecutive_days": consecutive

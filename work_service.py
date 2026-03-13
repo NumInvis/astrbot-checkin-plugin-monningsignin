@@ -113,6 +113,61 @@ class WorkService:
             "last_claim_time": last_claim_str
         }
     
+    async def _get_rich_average_asset(self, db) -> int:
+        """获取富人阶级（前20%）玩家的平均资产"""
+        cursor = await db.execute("SELECT user_id FROM users")
+        users = await cursor.fetchall()
+        
+        if not users:
+            return 0
+        
+        asset_list = []
+        for (uid,) in users:
+            # 获取用户资产
+            cursor = await db.execute(
+                "SELECT balance, bank_balance FROM users WHERE user_id = ?",
+                (uid,)
+            )
+            row = await cursor.fetchone()
+            if not row:
+                continue
+            try:
+                cash = int(row[0]) if row[0] else 0
+            except (ValueError, TypeError):
+                cash = 0
+            try:
+                bank = int(row[1]) if row[1] else 0
+            except (ValueError, TypeError):
+                bank = 0
+            
+            # 计算股票市值
+            cursor = await db.execute(
+                """SELECT COALESCE(SUM(sh.remaining * sp.current_price), 0)
+                   FROM stock_holdings sh
+                   JOIN stock_prices sp ON sh.stock_name = sp.stock_name
+                   WHERE sh.user_id = ? AND sh.remaining > 0 AND sp.delisted = 0""",
+                (uid,)
+            )
+            stock_row = await cursor.fetchone()
+            stock = int(stock_row[0]) if stock_row and stock_row[0] else 0
+            
+            total = cash + bank + stock
+            asset_list.append(total)
+        
+        if not asset_list:
+            return 0
+        
+        # 排序并取前20%
+        asset_list.sort(reverse=True)
+        top_20_percent = int(len(asset_list) * 0.2)
+        if top_20_percent == 0:
+            top_20_percent = 1
+        
+        top_assets = asset_list[:top_20_percent]
+        avg_asset = sum(top_assets) // len(top_assets)
+        
+        return avg_asset
+    
     async def claim_salary(self, user_id: str) -> dict:
         """领取工资"""
         async with aiosqlite.connect(self.db_path) as db:
@@ -138,7 +193,7 @@ class WorkService:
         if hours <= 0:
             return {"success": False, "message": "工作未满1小时，暂无工资可领"}
         
-        # 计算工资
+        # 计算基础工资
         total_earnings = 0
         min_pay = int(config.get('min', 0))
         max_pay = int(config.get('max', 0))
@@ -146,18 +201,39 @@ class WorkService:
             hourly = random.randint(min_pay, max_pay)
             total_earnings += hourly
         
+        # 千衢结社福利
+        qian_bonus = 0
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                "SELECT society_name FROM user_society WHERE user_id = ?",
+                (user_id,)
+            )
+            society_row = await cursor.fetchone()
+            if society_row and society_row[0] == "千衢结社":
+                # 计算千衢结社福利
+                cursor = await db.execute(
+                    "SELECT COUNT(*) FROM user_society WHERE society_name = '千衢结社'"
+                )
+                qian_count = await cursor.fetchone()
+                qian_count = qian_count[0] if qian_count else 0
+                
+                # 获取富人阶级平均资产
+                rich_avg = await self._get_rich_average_asset(db)
+                qian_bonus = int(qian_count * 0.0001 * rich_avg * hours)
+        
         now_str = now.strftime("%Y-%m-%d %H:%M:%S")
+        final_earnings = total_earnings + qian_bonus
         
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute(
                 "UPDATE users SET balance = balance + ? WHERE user_id = ?",
-                (total_earnings, user_id)
+                (final_earnings, user_id)
             )
             await db.execute(
                 """UPDATE user_work 
                    SET last_claim_time = ?, total_earned = total_earned + ?
                    WHERE user_id = ?""",
-                (now_str, total_earnings, user_id)
+                (now_str, final_earnings, user_id)
             )
             await db.commit()
             
@@ -175,5 +251,7 @@ class WorkService:
             "emoji": config.get('emoji', '💼'),
             "hours": hours,
             "total_earnings": total_earnings,
+            "qian_bonus": qian_bonus,
+            "final_earnings": final_earnings,
             "new_balance": new_balance
         }

@@ -324,9 +324,22 @@ class StockService:
             if total_available < want_sell:
                 return {"success": False, "message": f"可卖数量不足！可卖：{total_available}股"}
             
+            # 检查是否属于弗糯结社
+            is_nuo_member = False
+            cursor = await db.execute(
+                "SELECT society_name FROM user_society WHERE user_id = ?",
+                (user_id,)
+            )
+            society_row = await cursor.fetchone()
+            if society_row and society_row[0] == "弗糯结社":
+                is_nuo_member = True
+            
             # 计算卖出金额
             sell_amount = int(price * want_sell)
-            fee = max(1, int(sell_amount * 0.001))
+            if is_nuo_member:
+                fee = 0
+            else:
+                fee = max(1, int(sell_amount * 0.001))
             net_amount = sell_amount - fee
             
             # 扣减持仓
@@ -360,7 +373,8 @@ class StockService:
             "quantity": want_sell,
             "sell_amount": sell_amount,
             "fee": fee,
-            "net_amount": net_amount
+            "net_amount": net_amount,
+            "is_nuo_member": is_nuo_member
         }
     
     async def get_portfolio(self, user_id: str) -> dict:

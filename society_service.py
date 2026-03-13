@@ -321,6 +321,70 @@ class SocietyService:
         
         return cash + bank + stock, cash, bank, stock
     
+    async def get_society_benefit_detail(self, society_name: str) -> dict:
+        """获取结社福利详情（用于看板展示）"""
+        async with aiosqlite.connect(self.db_path) as db:
+            if society_name == "拜月结社":
+                cursor = await db.execute(
+                    "SELECT COUNT(*) FROM user_society WHERE society_name = '拜月结社'"
+                )
+                member_count = await cursor.fetchone()
+                member_count = member_count[0] if member_count else 0
+                return {
+                    "type": "签到奖励",
+                    "detail": f"额外增加{member_count}星声+{member_count}%星声",
+                    "current": member_count
+                }
+            
+            elif society_name == "负资产结社":
+                cursor = await db.execute("SELECT COUNT(*) FROM user_society")
+                total_members = await cursor.fetchone()
+                total_members = total_members[0] if total_members else 1
+                
+                cursor = await db.execute(
+                    "SELECT COUNT(*) FROM user_society WHERE society_name = '负资产结社'"
+                )
+                member_count = await cursor.fetchone()
+                member_count = member_count[0] if member_count else 0
+                
+                ratio = (member_count / total_members) * 100
+                interest_increase = max(0, 25 - ratio)
+                return {
+                    "type": "银行利率",
+                    "detail": f"增加{interest_increase:.1f}%",
+                    "current": interest_increase
+                }
+            
+            elif society_name == "千衢结社":
+                cursor = await db.execute(
+                    "SELECT COUNT(*) FROM user_society WHERE society_name = '千衢结社'"
+                )
+                member_count = await cursor.fetchone()
+                member_count = member_count[0] if member_count else 0
+                
+                rich_avg = await self._get_rich_average_asset(db)
+                wage_increase = member_count * 0.0001 * rich_avg
+                return {
+                    "type": "工资增加",
+                    "detail": f"每小时增加约{int(wage_increase)}星声",
+                    "current": int(wage_increase)
+                }
+            
+            elif society_name == "弗糯结社":
+                cursor = await db.execute(
+                    "SELECT COUNT(*) FROM user_society WHERE society_name = '弗糯结社'"
+                )
+                member_count = await cursor.fetchone()
+                member_count = member_count[0] if member_count else 0
+                dividend_increase = member_count * 0.1
+                return {
+                    "type": "股票福利",
+                    "detail": f"交易无手续费，分红增加{dividend_increase}%",
+                    "current": dividend_increase
+                }
+        
+        return {}
+    
     async def _check_society_top_achievement(self, user_id: str, society_name: str):
         """检查并授予结社第一成就"""
         achievement_map = {

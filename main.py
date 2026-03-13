@@ -566,6 +566,11 @@ class EconomyPlugin(Star):
         if signin_result.get('signin_favor_bonus', 0) > 0:
             lines.append(f"💰 彩色成就加成：+{signin_result['signin_favor_bonus']}好感值")
         
+        # 拜月结社福利
+        if signin_result.get('yue_bonus_fixed', 0) > 0 or signin_result.get('yue_bonus', 0) > 0:
+            yue_total = signin_result.get('yue_bonus_fixed', 0) + signin_result.get('yue_bonus', 0)
+            lines.append(f"🌙 拜月结社福利：+{yue_total}星声")
+        
         lines.append(f"🎁 赛季：S{CONFIG.CURRENT_SEASON}")
         
         if tax_bonus > 0:
@@ -2298,13 +2303,20 @@ class EconomyPlugin(Star):
             yield event.plain_result(result["message"])
             return
         
-        yield event.plain_result(
-            f"🎁 工资到账！\n"
-            f"🎁 职业：{result['emoji']}{result['work_name']}\n"
-            f"🎁 工作时间：{result['hours']}小时\n"
-            f" 获得工资：{format_num(result['total_earnings'])}星声\n"
-            f" 当前余额：{format_num(result['new_balance'])}星声"
-        )
+        lines = [
+            f"🎁 工资到账！",
+            f"🎁 职业：{result['emoji']}{result['work_name']}",
+            f"🎁 工作时间：{result['hours']}小时",
+            f"  基础工资：{format_num(result['total_earnings'])}星声"
+        ]
+        
+        if result.get('qian_bonus', 0) > 0:
+            lines.append(f"⚡ 千衢结社福利：+{format_num(result['qian_bonus'])}星声")
+            lines.append(f"  总计收入：{format_num(result['final_earnings'])}星声")
+        
+        lines.append(f"  当前余额：{format_num(result['new_balance'])}星声")
+        
+        yield event.plain_result("\n".join(lines))
     
     # ============== 股票系统 ==============
     @filter.command("股市")
@@ -2397,15 +2409,22 @@ class EconomyPlugin(Star):
             yield event.plain_result(result["message"])
             return
         
-        yield event.plain_result(
-            f"⛔ 卖出成功！\n"
-            f"🎁 {result['stock_name']}\n"
-            f"🎁 卖出价：{result['price']:.2f}\n"
-            f"🎁 数量：{result['quantity']}\n"
-            f"🎁 成交额：{format_num(result['sell_amount'])}星声\n"
-            f"🎁 手续费：{format_num(result['fee'])}\n"
-            f" 净收入：{format_num(result['net_amount'])}星声"
-        )
+        lines = [
+            f"⛔ 卖出成功！",
+            f"🎁 {result['stock_name']}",
+            f"🎁 卖出价：{result['price']:.2f}",
+            f"🎁 数量：{result['quantity']}",
+            f"🎁 成交额：{format_num(result['sell_amount'])}星声"
+        ]
+        
+        if result.get('is_nuo_member', False):
+            lines.append(f"🍚 弗糯结社福利：手续费全免！")
+        else:
+            lines.append(f"🎁 手续费：{format_num(result['fee'])}")
+        
+        lines.append(f"  净收入：{format_num(result['net_amount'])}星声")
+        
+        yield event.plain_result("\n".join(lines))
     
     @filter.command("持仓")
     async def cmd_portfolio(self, event: AstrMessageEvent):
@@ -2632,7 +2651,7 @@ class EconomyPlugin(Star):
         
         stats = await self.society_service.get_society_stats()
         
-        lines = [" 索拉里斯秘密结社", "═══════════════════"]
+        lines = ["  索拉里斯秘密结社", "═══════════════════"]
         
         if stats["total"] == 0:
             lines.append("目前还没有人加入任何结社")
@@ -2642,9 +2661,12 @@ class EconomyPlugin(Star):
             
             for name, config in CONFIG.SOCIETIES.items():
                 data = stats["stats"].get(name, {"count": 0, "percentage": 0})
+                benefit = await self.society_service.get_society_benefit_detail(name)
                 lines.append(f"{config['emoji']} {name}")
                 lines.append(f"   🎁 人数：{data['count']} 人 ({data['percentage']:.1f}%)")
                 lines.append(f"   🎁 {config['desc']}")
+                if benefit:
+                    lines.append(f"   🎁 福利：{benefit['type']} - {benefit['detail']}")
                 lines.append("")
         
         lines.append("💡 用法：/加入结社 结社名")
