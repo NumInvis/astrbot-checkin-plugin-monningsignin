@@ -1212,41 +1212,36 @@ class EconomyPlugin(Star):
         
         yield event.plain_result(msg)
     
-    @filter.command("领税收")
-    async def cmd_claim_tax(self, event: AstrMessageEvent):
-        """领取今日税收分红"""
+    @filter.command("收税")
+    async def cmd_collect_tax(self, event: AstrMessageEvent):
+        """管理员指令：强制立即收税"""
         await self._ensure_db()
         
         user_id = str(event.get_sender_id())
-        nickname = self._get_sender_name(event)
         
-        tax_bonus, remaining_pool = await self._claim_tax_bonus(user_id)
+        # 检查是否为管理员
+        if user_id not in CONFIG.ADMIN_USERS:
+            yield event.plain_result("⛔ 无权使用此命令")
+            return
         
-        if tax_bonus > 0:
-            # 更新用户余额
-            async with aiosqlite.connect(self.db_path) as db:
-                await db.execute(
-                    "UPDATE users SET balance = balance + ? WHERE user_id = ?",
-                    (tax_bonus, user_id)
-                )
-                await db.commit()
-            
-            # 获取最新余额
-            user = await self.db_manager.get_user(user_id)
-            
+        # 强制收税
+        result = await self._collect_tax()
+        
+        if result:
+            total_tax, bonus_pool, top10_list, wealth_gap_ratio, extra_rate = result
             msg = (
-                f"🎁 {nickname} 领取税收分红\n"
+                f"🏛️️ 强制收税完成\n"
                 f"═══════════════════\n"
-                f"💰 获得分红：{format_num(tax_bonus)} 星声\n"
-                f"💵 当前余额：{format_num(user['balance'])} 星声\n"
-                f"🎁 奖池剩余：{format_num(remaining_pool)} 星声\n"
+                f"💰 总收税：{format_num(total_tax)} 星声\n"
+                f"🎁 奖池：{format_num(bonus_pool)} 星声\n"
             )
+            if wealth_gap_ratio and wealth_gap_ratio > 1:
+                msg += f"⚖️ 贫富差距指数：r={wealth_gap_ratio:.2f}\n"
+                msg += f"📊 调节税率：+{extra_rate*100:.1f}%\n"
+            msg += f"\n被税名单：{top10_list or '无'}"
             yield event.plain_result(msg)
         else:
-            yield event.plain_result(
-                f"⛔ {nickname}，今日税收分红已领取完毕或暂无分红可领\n"
-                f"💡 提示：每日签到时可自动领取分红"
-            )
+            yield event.plain_result("📧 今日已收过税，无需重复收取")
     
     # ============== 好感度系统 ==============
     @filter.command("好感度")
