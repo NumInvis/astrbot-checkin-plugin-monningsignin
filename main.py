@@ -139,6 +139,9 @@ class EconomyPlugin(Star):
             # 初始化公告表
             await self.announcement_service.init_table()
             
+            # 初始化税收表
+            await self.tax_service.init_table()
+            
             self._initialized = True
             logger.info("【经济系统】数据库初始化完成")
     

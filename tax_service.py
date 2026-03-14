@@ -31,6 +31,21 @@ class TaxService:
     def __init__(self, db_path: str):
         self.db_path = db_path
     
+    async def init_table(self):
+        """初始化税收表"""
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS tax_pool (
+                    date TEXT PRIMARY KEY,
+                    total_tax INTEGER DEFAULT 0,
+                    bonus_pool INTEGER DEFAULT 0,
+                    top10_list TEXT,
+                    wealth_gap_ratio REAL DEFAULT 1.0,
+                    claimed INTEGER DEFAULT 0
+                )
+            """)
+            await db.commit()
+    
     async def collect_tax(self) -> Optional[Tuple]:
         """收取每日税收"""
         today = get_beijing_time().strftime("%Y-%m-%d")
