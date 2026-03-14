@@ -1105,10 +1105,10 @@ class EconomyPlugin(Star):
         
         latest = history[0]
         lines = [
-            f"[图表] 索拉里斯宏观经济报告（S{CONFIG.CURRENT_SEASON}赛季）",
+            f"📊 索拉里斯宏观经济报告（S{CONFIG.CURRENT_SEASON}赛季）",
             "═══════════════════",
             f"💰 总资产：{format_num(int(latest[1]))} 星声",
-            f"[用户组] 玩家数：{int(latest[2])} 人",
+            f"👥 玩家数：{int(latest[2])} 人",
             f"💵 人均资产：{format_num(int(latest[3]))} 星声",
             f"📉 基尼系数：{gini:.3f}",
             "",
@@ -1140,7 +1140,7 @@ class EconomyPlugin(Star):
             row = await cursor.fetchone()
         
         if not row:
-            yield event.plain_result("[邮箱] 今日尚未收税")
+            yield event.plain_result("📧 今日尚未收税")
             return
         
         total, bonus, claimed, top10, gap_ratio, extra_rate = row
@@ -1152,12 +1152,12 @@ class EconomyPlugin(Star):
             f"💰 总收税：{format_num(total)}星声\n"
             f"🎁 今日奖池：{format_num(bonus)}星声\n"
             f"⛔ 已领取：{format_num(claimed)}星声\n"
-            f"[包裹] 剩余：{format_num(remaining)}星声\n"
+            f"🎒 剩余：{format_num(remaining)}星声\n"
         )
         
         if gap_ratio and gap_ratio > 1:
             msg += f"⚖️ 贫富差距指数 r={gap_ratio:.2f}\n"
-            msg += f"[图表] 调节税率：+{extra_rate*100:.1f}%\n"
+            msg += f"📊 调节税率：+{extra_rate*100:.1f}%\n"
         
         # 显示税率信息
         msg += f"\n🏛️️ 税率设置：\n"
@@ -1362,7 +1362,7 @@ class EconomyPlugin(Star):
         all_achievements = await self.achievement_service.get_all_achievements()
         
         if not all_achievements:
-            yield event.plain_result("[邮箱] 暂无成就数据")
+            yield event.plain_result("📧 暂无成就数据")
             return
         
         lines = ["🎁 所有人成就统计", "═══════════════════"]
@@ -1370,7 +1370,7 @@ class EconomyPlugin(Star):
         # 统计每个用户的成就
         for uid, achievements in all_achievements.items():
             name = await self._get_nickname(uid) or mask_id(uid)
-            lines.append(f"\n[包裹] {name}")
+            lines.append(f"\n🎒 {name}")
             lines.append(f"   成就数量：{len(achievements)}")
             
             if achievements:
@@ -1391,7 +1391,7 @@ class EconomyPlugin(Star):
         lines.extend([
             "",
             "═══════════════════",
-            f"[图表] 总计：{len(all_achievements)} 个用户，{total_achievements} 个成就"
+            f"📊 总计：{len(all_achievements)} 个用户，{total_achievements} 个成就"
         ])
         
         yield event.plain_result("\n".join(lines))
@@ -1815,7 +1815,7 @@ class EconomyPlugin(Star):
         yield event.plain_result(
             f"⛔ 存款成功！\n"
             f"🎁 银行存款：{format_num(result['new_bank'])}星声\n"
-            f"[包裹] 剩余抽卡资源：{format_num(result['new_cash'])}星声\n"
+            f"🎒 剩余抽卡资源：{format_num(result['new_cash'])}星声\n"
             f"📈 日息{result['rate_pct']}%{vip_str}"
         )
     
@@ -1848,7 +1848,7 @@ class EconomyPlugin(Star):
             f"🎁 手续费：{fee_str}\n"
             f"💵 到账抽卡资源：{format_num(result['actual'])}星声\n"
             f"💵 现在抽卡资源：{format_num(result['new_cash'])}星声\n"
-            f"[包裹] 剩余存款：{format_num(result['new_bank'])}星声"
+            f"🎒 剩余存款：{format_num(result['new_bank'])}星声"
         )
     
     # ============== 商店系统 ==============
@@ -1862,7 +1862,7 @@ class EconomyPlugin(Star):
         
         for name, info in items.items():
             limit = f"（每日限购{info['daily_limit']}次）" if info['daily_limit'] > 0 else "（永久有效）"
-            lines.append(f"[包裹] {name}")
+            lines.append(f"🎒 {name}")
             lines.append(f"💰 价格：{format_num(info['price'])}星声{limit}")
             lines.append(f"📝 {info['desc']}")
             lines.append("")
@@ -1904,7 +1904,7 @@ class EconomyPlugin(Star):
             f"⛔ 购买成功！\n"
             f"🎁 {result['item_name']} x{result['count']}\n"
             f"🎁 花费：{format_num(result['total_price'])}星声\n"
-            f"[包裹] 剩余星声：{format_num(result['new_balance'])}星声"
+            f"🎒 剩余星声：{format_num(result['new_balance'])}星声"
         )
     
     @filter.command("背包")
@@ -1924,7 +1924,7 @@ class EconomyPlugin(Star):
         else:
             msg = "🎁 我的背包\n═══════════════════\n"
             for name, qty in inventory["items"]:
-                msg += f"[包裹] {name} x{qty}\n"
+                msg += f"🎒 {name} x{qty}\n"
 
         msg += f"\n🎁 今日剩余占卜次数：{inventory['remaining_lottery_count']}/{CONFIG.LOTTERY_LIMIT}次\n"
         msg += "🎁 使用：/使用 占卜券 金额"
@@ -2033,7 +2033,7 @@ class EconomyPlugin(Star):
                 f"🎁 投入：{format_num(result['bet'])}星声 → 获得：{format_num(result['final'])}星声\n"
                 f"🎁 {result_str}\n"
                 f"🎁 当前抽卡资源：{format_num(result['new_cash'])}星声\n"
-                f"[包裹] 剩余占卜券：{result['ticket_count']}张\n"
+                f"🎒 剩余占卜券：{result['ticket_count']}张\n"
                 f"🎁 今日占卜：{result['used_count']}/{CONFIG.LOTTERY_LIMIT}次"
             )
 
@@ -2216,7 +2216,7 @@ class EconomyPlugin(Star):
             f"🎁 投入：{format_num(result['bet'])}星声 → 获得：{format_num(result['final'])}星声\n"
             f"🎁 {result_str}\n"
             f"🎁 当前抽卡资源：{format_num(result['new_cash'])}星声\n"
-            f"[包裹] 剩余占卜券：{result['ticket_count']}张\n"
+            f"🎒 剩余占卜券：{result['ticket_count']}张\n"
             f"🎁 今日占卜：{result['used_count']}/{CONFIG.LOTTERY_LIMIT}次"
         )
 
@@ -2954,7 +2954,7 @@ class EconomyPlugin(Star):
             lines.append(f"   时间：{ann['publish_time']}")
             lines.append("")
 
-        lines.append(f"[图表] 共 {len(announcements)} 条公告")
+        lines.append(f"📊 共 {len(announcements)} 条公告")
         lines.append("💡 使用 /公告 查看最新公告")
         
         yield event.plain_result("\n".join(lines))
@@ -2994,7 +2994,7 @@ class EconomyPlugin(Star):
             for i, group_id in enumerate(whitelist, 1):
                 lines.append(f"{i}. {group_id}")
             lines.append("═══════════════════")
-            lines.append(f"[图表] 共 {len(whitelist)} 个群")
+            lines.append(f"📊 共 {len(whitelist)} 个群")
             lines.append("💡 用法：/公告白名单 add 群号")
             lines.append("   /公告白名单 remove 群号")
             lines.append("   /公告白名单 list")
@@ -3013,7 +3013,7 @@ class EconomyPlugin(Star):
             for i, group_id in enumerate(whitelist, 1):
                 lines.append(f"{i}. {group_id}")
             lines.append("═══════════════════")
-            lines.append(f"[图表] 共 {len(whitelist)} 个群")
+            lines.append(f"📊 共 {len(whitelist)} 个群")
             yield event.plain_result("\n".join(lines))
         
         elif action == "add":
