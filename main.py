@@ -1220,7 +1220,7 @@ class EconomyPlugin(Star):
         user_id = str(event.get_sender_id())
         
         # 检查是否为管理员
-        if user_id not in CONFIG.ADMIN_USERS:
+        if user_id not in CONFIG.ADMIN_IDS:
             yield event.plain_result("⛔ 无权使用此命令")
             return
         
