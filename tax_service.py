@@ -161,6 +161,18 @@ class TaxService:
             
             return share, remaining - share
     
+    async def force_collect_tax(self) -> Optional[Tuple]:
+        """强制收税（管理员用），删除今日记录后重新收税"""
+        today = get_beijing_time().strftime("%Y-%m-%d")
+        
+        async with aiosqlite.connect(self.db_path) as db:
+            # 删除今日税收记录（如果存在）
+            await db.execute("DELETE FROM tax_pool WHERE date = ?", (today,))
+            await db.commit()
+            
+            # 重新收税
+            return await self.collect_tax()
+    
     async def _get_all_assets(self, db) -> List[Tuple[str, int]]:
         """获取所有用户资产"""
         cursor = await db.execute("SELECT user_id FROM users")

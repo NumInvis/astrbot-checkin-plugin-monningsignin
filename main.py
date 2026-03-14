@@ -335,6 +335,10 @@ class EconomyPlugin(Star):
         """收取每日税收"""
         return await self.tax_service.collect_tax()
     
+    async def _force_collect_tax(self) -> Optional[Tuple]:
+        """强制收税（管理员用）"""
+        return await self.tax_service.force_collect_tax()
+    
     async def _claim_tax_bonus(self, user_id: str) -> Tuple[int, int]:
         """领取税收分红"""
         return await self.tax_service.claim_tax_bonus(user_id)
@@ -1224,8 +1228,8 @@ class EconomyPlugin(Star):
             yield event.plain_result("⛔ 无权使用此命令")
             return
         
-        # 强制收税
-        result = await self._collect_tax()
+        # 强制收税（删除今日记录后重新收）
+        result = await self._force_collect_tax()
         
         if result:
             total_tax, bonus_pool, top10_list, wealth_gap_ratio, extra_rate = result
@@ -1241,7 +1245,7 @@ class EconomyPlugin(Star):
             msg += f"\n被税名单：{top10_list or '无'}"
             yield event.plain_result(msg)
         else:
-            yield event.plain_result("📧 今日已收过税，无需重复收取")
+            yield event.plain_result("📧 今日无可收税对象")
     
     # ============== 好感度系统 ==============
     @filter.command("好感度")
