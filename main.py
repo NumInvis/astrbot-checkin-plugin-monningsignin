@@ -1172,6 +1172,82 @@ class EconomyPlugin(Star):
         
         yield event.plain_result(msg)
     
+    @filter.command("昨日税收")
+    async def cmd_yesterday_tax(self, event: AstrMessageEvent):
+        """查看昨日税收报告"""
+        await self._ensure_db()
+        
+        yesterday = (get_beijing_time() - timedelta(days=1)).strftime("%Y-%m-%d")
+        
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                """SELECT total_tax, bonus_pool, claimed, top10_list, 
+                          wealth_gap_ratio, extra_tax_rate
+                   FROM tax_pool WHERE date = ?""",
+                (yesterday,)
+            )
+            row = await cursor.fetchone()
+        
+        if not row:
+            yield event.plain_result("📧 昨日无税收记录")
+            return
+        
+        total, bonus, claimed, top10, gap_ratio, extra_rate = row
+        remaining = bonus - claimed
+        
+        msg = (
+            f"🏛️️ 昨日富豪税报告 ({yesterday})\n"
+            f"═══════════════════\n"
+            f"💰 总收税：{format_num(total)}星声\n"
+            f"🎁 奖池总额：{format_num(bonus)}星声\n"
+            f"✅ 已领取：{format_num(claimed)}星声\n"
+            f"🎒 剩余：{format_num(remaining)}星声\n"
+        )
+        
+        if gap_ratio and gap_ratio > 1:
+            msg += f"⚖️ 贫富差距指数 r={gap_ratio:.2f}\n"
+            msg += f"📊 调节税率：+{extra_rate*100:.1f}%\n"
+        
+        msg += f"\n═══════════════════\n被税名单：{top10 or '无'}"
+        
+        yield event.plain_result(msg)
+    
+    @filter.command("领税收")
+    async def cmd_claim_tax(self, event: AstrMessageEvent):
+        """领取今日税收分红"""
+        await self._ensure_db()
+        
+        user_id = str(event.get_sender_id())
+        nickname = self._get_sender_name(event)
+        
+        tax_bonus, remaining_pool = await self._claim_tax_bonus(user_id)
+        
+        if tax_bonus > 0:
+            # 更新用户余额
+            async with aiosqlite.connect(self.db_path) as db:
+                await db.execute(
+                    "UPDATE users SET balance = balance + ? WHERE user_id = ?",
+                    (tax_bonus, user_id)
+                )
+                await db.commit()
+            
+            # 获取最新余额
+            user = await self.db_manager.get_user(user_id)
+            
+            msg = (
+                f"🎁 {nickname} 领取税收分红\n"
+                f"═══════════════════\n"
+                f"💰 获得分红：{format_num(tax_bonus)} 星声\n"
+                f"💵 当前余额：{format_num(user['balance'])} 星声\n"
+                f"🎁 奖池剩余：{format_num(remaining_pool)} 星声\n"
+            )
+            yield event.plain_result(msg)
+        else:
+            yield event.plain_result(
+                f"⛔ {nickname}，今日税收分红已领取完毕或暂无分红可领\n"
+                f"💡 提示：每日签到时可自动领取分红"
+            )
+    
     # ============== 好感度系统 ==============
     @filter.command("好感度")
     async def cmd_favor(self, event: AstrMessageEvent):
